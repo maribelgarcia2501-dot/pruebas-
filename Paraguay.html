@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="description"
+        content="Área de coberturas de Mensajería Express - Paraguay">
+
+    <meta name="theme-color" content="#0f172a">
+
+    <title>Mensajería Express - Coberturas Paraguay</title>
+
+
+    <!-- =====================================================
+         GOOGLE FONT
+    ====================================================== -->
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+
+    <!-- =====================================================
+         FONT AWESOME
+    ====================================================== -->
+
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+
+    <!-- =====================================================
+         LEAFLET
+    ====================================================== -->
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+
+    <!-- =====================================================
+         LEAFLET GEOMAN
+    ====================================================== -->
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.css">
+
+
+    <!-- =====================================================
+         CSS
+    ====================================================== -->
+
+    <link
+        rel="stylesheet"
+        href="./coberturas.css">
+
+</head>
+
+
+<body>
+
+
+<!-- =========================================================
+     HEADER
+========================================================= -->
+
+<header class="header">
+
+    <div class="header-contenido">
+
+
+        <div class="marca">
+
+            <div class="logo">
+
+                <i class="fa-solid fa-truck-fast"></i>
+
+            </div>
+
+
+            <div class="marca-texto">
+
+                <strong>
+                    Webcorp Business
+                </strong>
+
+                <span>
+                    Sistema de coberturas
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <button
+            type="button"
+            class="btn-regresar"
+            onclick="history.back()">
+
+            <i class="fa-solid fa-arrow-left"></i>
+
+            Volver
+
+        </button>
+
+    </div>
+
+</header>
+
+
+
+<!-- =========================================================
+     CONTENEDOR
+========================================================= -->
+
+<main class="contenedor">
+
+
+<!-- =========================================================
+     ENCABEZADO
+========================================================= -->
+
+<section class="encabezado">
+
+    <div>
+
+        <div class="ruta">
+
+            <span>
+                Webcorp Business
+            </span>
+
+            <i class="fa-solid fa-chevron-right"></i>
+
+            <strong>
+                Paraguay
+            </strong>
+
+            <i class="fa-solid fa-chevron-right"></i>
+
+            <strong>
+                Coberturas
+            </strong>
+
+        </div>
+
+
+        <h1>
+            Área de Coberturas
+        </h1>
+
+
+        <p>
+            Administra y dibuja las zonas donde
+            Mensajería Express realiza sus envíos
+            en Paraguay.
+        </p>
+
+    </div>
+
+
+    <div class="pais">
+
+        <div class="pais-bandera">
+            PY
+        </div>
+
+        <div>
+
+            <small>
+                País seleccionado
+            </small>
+
+            <strong>
+                Paraguay
+            </strong>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<!-- =========================================================
+     ESTADÍSTICAS
+========================================================= -->
+
+<section class="estadisticas">
+
+
+    <div class="estadistica">
+
+        <div class="estadistica-icono azul">
+
+            <i class="fa-solid fa-map"></i>
+
+        </div>
+
+        <div>
+
+            <span>
+           Departamentos 
+            </span>
+
+            <strong id="estadisticaDepartamentos">
+                17 + Asuncion 
+            </strong>
+
+        </div>
+
+    </div>
+
+
+
+    <div class="estadistica">
+
+        <div class="estadistica-icono celeste">
+
+            <i class="fa-solid fa-city"></i>
+
+        </div>
+
+        <div>
+
+            <span>
+                Distritos 
+            </span>
+
+            <strong id="estadisticaMunicipios">
+                263
+            </strong>
+
+        </div>
+
+    </div> 
+
+
+    </div>
+
+
+    <div class="estadistica">
+
+        <div class="estadistica-icono gris">
+
+            <i class="fa-solid fa-truck-fast"></i>
+
+        </div>
+
+        <div>
+
+            <span>
+                Estado del servicio
+            </span>
+
+            <strong>
+                Activo
+            </strong>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<!-- =========================================================
+     PANEL MAPA
+========================================================= -->
+
+<section class="panel panel-mapa">
+
+
+    <!-- =====================================================
+         HEADER MAPA
+    ====================================================== -->
+
+    <div class="panel-header">
+
+        <div>
+
+            <span class="panel-etiqueta">
+                ADMINISTRACIÓN DE COBERTURA
+            </span>
+
+            <h2>
+                Mapa de Cobertura de Paraguay 
+            </h2>
+
+            <p id="textoModoMapa">
+                Selecciona una herramienta para comenzar.
+            </p>
+
+        </div>
+
+
+        <div class="estado-cobertura">
+
+            <span></span>
+
+            Sistema de cobertura activo
+
+        </div>
+
+    </div>
+
+
+
+    <!-- =====================================================
+         BUSCADOR
+    ====================================================== -->
+
+    <div class="buscador-mapa">
+
+        <div class="buscador">
+
+            <i class="fa-solid fa-magnifying-glass"></i>
+
+
+            <input
+                type="search"
+                id="buscarDepartamento"
+                placeholder="Buscar dirección, colonia, zona, departamentos o distritos..."
+                autocomplete="off">
+
+
+            <button
+                type="button"
+                id="limpiarBusqueda"
+                title="Limpiar búsqueda">
+
+                <i class="fa-solid fa-xmark"></i>
+
+            </button>
+
+        </div>
+
+
+        <div
+            id="resultadosDirecciones"
+            class="resultados-direcciones"
+            style="display:none;">
+
+        </div>
+
+    </div>
+
+
+
+    <!-- =====================================================
+         HERRAMIENTAS
+    ====================================================== -->
+
+    <div class="herramientas-mapa">
+
+
+        <!-- =================================================
+             INFORMACIÓN
+        ================================================== -->
+
+        <div class="herramientas-info">
+
+            <i class="fa-solid fa-circle-info"></i>
+
+            <div>
+
+                <strong id="tituloHerramienta">
+                    Selecciona una herramienta
+                </strong>
+
+                <span id="descripcionHerramienta">
+                    Usa las herramientas para crear o
+                    modificar coberturas.
+                </span>
+
+            </div>
+
+        </div>
+
+
+
+        <!-- =================================================
+             BOTONES
+        ================================================== -->
+
+        <div class="herramientas-acciones">
+
+
+            <!-- SELECCIONAR DEPARTAMENTOS -->
+
+            <button
+                type="button"
+                id="btnNuevaZona"
+                class="btn-herramienta btn-principal">
+
+                <i class="fa-solid fa-map-location-dot"></i>
+
+                Departamentos 
+
+            </button>
+
+
+
+            <!-- MUNICIPIOS -->
+
+            <button
+                type="button"
+                id="btnPintarMunicipios"
+                class="btn-herramienta">
+
+                <i class="fa-solid fa-city"></i>
+
+                Distritos
+
+            </button>
+
+
+            <!-- CÍRCULO -->
+
+            <button
+                type="button"
+                id="btnCirculo"
+                class="btn-herramienta">
+
+                <i class="fa-regular fa-circle"></i>
+
+                Círculo
+
+            </button>
+
+
+
+
+            <!-- BORRADOR -->
+
+            <button
+                type="button"
+                id="btnBorrador"
+                class="btn-herramienta btn-peligro">
+
+                <i class="fa-solid fa-eraser"></i>
+
+                Borrador
+
+            </button>
+
+
+            <!-- ELIMINAR -->
+
+            <button
+                type="button"
+                id="btnEliminarZonas"
+                class="btn-herramienta btn-peligro">
+
+                <i class="fa-solid fa-trash"></i>
+
+                Eliminar
+
+            </button>
+
+
+
+            <!-- DESHACER -->
+
+            <button
+                type="button"
+                id="btnDeshacer"
+                class="btn-herramienta">
+
+                <i class="fa-solid fa-rotate-left"></i>
+
+                Deshacer
+
+            </button>
+
+
+
+            <!-- REHACER -->
+
+            <button
+                type="button"
+                id="btnRehacer"
+                class="btn-herramienta">
+
+                <i class="fa-solid fa-rotate-right"></i>
+
+                Rehacer
+
+            </button>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- =====================================================
+         LAYOUT MAPA
+    ====================================================== -->
+
+    <div class="mapa-layout">
+
+
+        <!-- =================================================
+             MAPA
+        ================================================== -->
+
+        <div class="mapa-area">
+
+            <div
+                id="mapaUruguay"
+                class="mapa-real">
+
+            </div>
+
+
+            <div class="mapa-estado">
+
+                <span class="estado-punto"></span>
+
+                Mapa activo
+
+            </div>
+
+
+            <!-- =================================================
+                 INDICADOR DE HERRAMIENTA
+            ================================================== -->
+
+            <div
+                id="herramientaMapaActiva"
+                class="herramienta-mapa-activa">
+
+                Seleccionar
+
+            </div>
+
+        </div>
+
+
+
+        <!-- =================================================
+             PANEL LATERAL
+        ================================================== -->
+
+        <aside class="mapa-lateral">
+
+
+            <!-- =================================================
+                 PAÍS
+            ================================================== -->
+
+            <div class="pais-info">
+
+                <div class="bandera-grande">
+                    PY
+                </div>
+
+                <div>
+
+                    <strong>
+                        Paraguay
+                    </strong>
+
+                    <span>
+                        República de Paraguay
+                    </span>
+
+                </div>
+
+            </div>
+
+
+
+            <div class="linea"></div>
+
+
+
+            <!-- =================================================
+                 ZONA SELECCIONADA
+            ================================================== -->
+
+            <div class="zona-seleccionada">
+
+                <div class="zona-icono">
+
+                    <i class="fa-solid fa-location-dot"></i>
+
+                </div>
+
+                <div>
+
+                    <span>
+                        Zona seleccionada
+                    </span>
+
+                    <strong id="zonaSeleccionada">
+                        Ninguna
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+
+            <div class="linea"></div>
+
+
+
+            <!-- =================================================
+                 CONFIGURACIÓN
+            ================================================== -->
+
+            <div class="configuracion-zona">
+
+
+                <div class="seccion-titulo">
+
+                    <i class="fa-solid fa-sliders"></i>
+
+                    Configuración de cobertura
+
+                </div>
+
+
+
+                <!-- NOMBRE -->
+
+                <div class="campo">
+
+                    <label for="nombreZona">
+                        Nombre de la zona
+                    </label>
+
+                    <input
+                        type="text"
+                        id="nombreZona"
+                        placeholder="Ej. Zona "
+                        autocomplete="off">
+
+                </div>
+
+
+
+                <!-- COBERTURA -->
+
+                <div class="campo">
+
+                    <label for="tipoCobertura">
+                        Tipo de cobertura
+                    </label>
+
+
+                    <select id="tipoCobertura">
+
+                        <option value="same-day">
+                            Same Day
+                        </option>
+
+                        <option value="next-day">
+                            Next Day
+                        </option>
+
+                        <option value="72h">
+                            48 horas
+                        </option>
+
+                        <option value="No-cobertura">
+                            No hay cobertura
+                        </option>
+
+                        <option value="alto">
+                            Zonas de alto riesgo 
+                        </option>
+
+
+
+                    </select>
+
+                </div>
+
+
+
+                <!-- ESTADO -->
+
+                <div class="campo">
+
+                    <label for="estadoZona">
+                        Estado
+                    </label>
+
+
+                    <select id="estadoZona">
+
+                        <option value="activa">
+                            Activa
+                        </option>
+
+                        <option value="inactiva">
+                            Inactiva
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+
+                <!-- GUARDAR -->
+
+                <button
+                    type="button"
+                    id="btnGuardarZona"
+                    class="btn-guardar">
+
+                    <i class="fa-solid fa-floppy-disk"></i>
+
+                    Guardar zona
+
+                </button>
+
+                <button type="button" id="btnSacarData" class="btn-secundario">
+    <i class="fa-solid fa-database"></i>
+    Sacar la data
+</button>
+
+            </div>
+
+
+
+            <div class="linea"></div>
+
+
+
+            <!-- =================================================
+                 LEYENDA
+            ================================================== -->
+
+          <div class="leyenda">
+
+    <div class="seccion-titulo">
+        <i class="fa-solid fa-layer-group"></i>
+        Tipos de cobertura
+    </div>
+
+    <div class="leyenda-item">
+        <span class="leyenda-color same-day"></span>
+        <div>
+            <strong>Same Day</strong>
+            <span>Entrega el mismo día</span>
+        </div>
+    </div>
+
+    <div class="leyenda-item">
+        <span class="leyenda-color next-day"></span>
+        <div>
+            <strong>Next Day</strong>
+            <span>Entrega al día siguiente</span>
+        </div>
+    </div>
+
+    <div class="leyenda-item">
+        <span class="leyenda-color cobertura-72h"></span>
+        <div>
+            <strong>48 horas</strong>
+            <span>Entrega hasta 48 horas</span>
+        </div>
+    </div>
+
+    <div class="leyenda-item">
+        <span class="leyenda-color no-cobertura"></span>
+        <div>
+            <strong>No hay cobertura</strong>
+            <span>En esos lugares o zonas no tenemos cobertura</span>
+        </div>
+    </div>
+
+    <div class="leyenda-item">
+        <span class="leyenda-color alto"></span>
+        <div>
+            <strong>Zonas de alto riesgo</strong>
+            <span>Zonas donde no hay cobertura por su alto riesgo</span>
+        </div>
+    </div>
+
+</div>
+
+<div class="linea"></div>
+
+
+
+            <!-- =================================================
+                 ACCIONES RÁPIDAS
+            ================================================== -->
+
+            <div class="acciones-rapidas">
+
+                <div class="seccion-titulo">
+
+                    <i class="fa-solid fa-bolt"></i>
+
+                    Acciones rápidas
+
+                </div>
+
+
+                <button
+                    type="button"
+                    id="btnGuardarTodo"
+                    class="btn-secundario">
+
+                    <i class="fa-solid fa-floppy-disk"></i>
+
+                    Guardar todo
+
+                </button>
+
+
+                <button
+                    type="button"
+                    id="btnCargarTodo"
+                    class="btn-secundario">
+
+                    <i class="fa-solid fa-rotate"></i>
+
+                    Recargar guardado
+
+                </button>
+
+
+                <button
+                    type="button"
+                    id="btnLimpiarTodo"
+                    class="btn-secundario btn-secundario-peligro">
+
+                    <i class="fa-solid fa-trash-can"></i>
+
+                    Limpiar coberturas
+
+                </button>
+
+            </div>
+
+
+
+            <div class="linea"></div>
+
+
+
+            <!-- =================================================
+                 AYUDA
+            ================================================== -->
+
+            <div class="nota">
+
+                <i class="fa-solid fa-circle-info"></i>
+
+                <span id="textoAyuda">
+
+                    Puedes pintar áreas completas o pequeñas
+                    partes del mapa. El borrador permite
+                    eliminar solamente una parte de una
+                    cobertura sin borrar toda la zona.
+
+                </span>
+
+            </div>
+
+        </aside>
+
+    </div>
+
+</section>
+
+
+
+<!-- =========================================================
+     LISTADO DE DEPARTAMENTOS
+========================================================= -->
+
+<section class="panel">
+
+
+    <div class="panel-header departamentos-header">
+
+        <div>
+
+            <span class="panel-etiqueta">
+                COBERTURA NACIONAL
+            </span>
+
+            <h2>
+                 Departamentos
+            </h2>
+
+            <p>
+                Selecciona una Departamentos para centrar
+                el mapa en esa zona.
+            </p>
+
+        </div>
+
+
+        <div class="total-departamentos">
+
+            <strong id="totalDepartamentos">
+                17 
+            </strong>
+
+            <span>
+                 Departamentos + Asunción
+            </span>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- =====================================================
+         BUSCADOR LISTA
+    ====================================================== -->
+
+    <div class="buscador-contenedor">
+
+        <div class="buscador">
+
+            <i class="fa-solid fa-magnifying-glass"></i>
+
+
+            <input
+                type="search"
+                id="buscarLista"
+                placeholder="Filtrar departamentos o distritos ..."
+                autocomplete="off">
+
+
+            <button
+                type="button"
+                id="limpiarLista"
+                title="Limpiar">
+
+                <i class="fa-solid fa-xmark"></i>
+
+            </button>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- =====================================================
+         LISTA
+    ====================================================== -->
+
+    <div
+        class="departamentos-grid"
+        id="listaDepartamentos">
+
+    </div>
+
+
+
+    <!-- =====================================================
+         SIN RESULTADOS
+    ====================================================== -->
+
+    <div
+        class="sin-resultados"
+        id="sinResultados"
+        style="display:none;">
+
+        <div class="sin-resultados-icono">
+
+            <i class="fa-solid fa-location-dot"></i>
+
+        </div>
+
+
+        <strong>
+            No se encontraron resultados
+        </strong>
+
+
+        <span>
+            Intenta utilizar otro nombre.
+        </span>
+
+    </div>
+
+</section>
+
+
+
+<!-- =========================================================
+     INFORMACIÓN FINAL
+========================================================= -->
+
+<section class="informacion">
+
+    <div class="informacion-icono">
+
+        <i class="fa-solid fa-truck-fast"></i>
+
+    </div>
+
+
+    <div>
+
+        <strong>
+            Cobertura de Mensajería Express
+        </strong>
+
+
+        <p>
+
+            Administra las zonas de cobertura de Paraguay
+            desde el mapa. Puedes trabajar por departamentos,
+            distritos o dibujar áreas personalizadas.
+
+        </p>
+
+    </div>
+
+</section>
+
+</main>
+
+
+
+<!-- =========================================================
+     MODAL DEPARTAMENTO
+========================================================= -->
+
+<div
+    class="modal"
+    id="modalDepartamento"
+    style="display:none;">
+
+    <div
+        class="modal-fondo"
+        id="modalFondo">
+
+    </div>
+
+
+    <div class="modal-contenido">
+
+
+        <button
+            type="button"
+            class="modal-cerrar"
+            id="cerrarModal"
+            aria-label="Cerrar">
+
+            <i class="fa-solid fa-xmark"></i>
+
+        </button>
+
+
+
+        <div class="modal-encabezado">
+
+            <div class="modal-icono">
+
+                <i class="fa-solid fa-location-dot"></i>
+
+            </div>
+
+
+            <div>
+
+                <span>
+                     Departamentos 
+                </span>
+
+                <h3 id="modalTitulo">
+                    Paraguay
+                </h3>
+
+            </div>
+
+        </div>
+
+
+
+        <div class="modal-estado">
+
+            <div class="modal-check">
+
+                <i class="fa-solid fa-check"></i>
+
+            </div>
+
+
+            <div>
+
+                <strong>
+                    Provincia seleccionado
+                </strong>
+
+                <span id="modalDescripcion">
+
+                    Puedes administrar la cobertura
+                    de esta Departamentos desde el mapa.
+
+                </span>
+
+            </div>
+
+        </div>
+
+
+
+        <div class="modal-datos">
+
+            <div>
+
+                <span>
+                    Estado
+                </span>
+
+                <strong class="activo">
+                    Activo
+                </strong>
+
+            </div>
+
+
+            <div>
+
+                <span>
+                    Servicio
+                </span>
+
+                <strong>
+                    Disponible
+                </strong>
+
+            </div>
+
+
+            <div>
+
+                <span>
+                    País
+                </span>
+
+                <strong>
+                    Paraguay
+                </strong>
+
+            </div>
+
+
+            <div>
+
+                <span>
+                    Tipo
+                </span>
+
+                <strong>
+                    Mensajería
+                </strong>
+
+            </div>
+
+        </div>
+
+
+
+        <div class="modal-pie">
+
+            <button
+                type="button"
+                id="cerrarModalBoton">
+
+                Cerrar
+
+                <i class="fa-solid fa-check"></i>
+
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<!-- =========================================================
+     NOTIFICACIÓN
+========================================================= -->
+
+<div
+    class="notificacion"
+    id="notificacion">
+
+    <div class="notificacion-icono">
+
+        <i class="fa-solid fa-circle-check"></i>
+
+    </div>
+
+
+    <div>
+
+        <strong id="notificacionTitulo">
+            Sistema
+        </strong>
+
+        <span id="notificacionMensaje">
+            Listo.
+        </span>
+
+    </div>
+
+</div>
+
+
+
+<!-- =========================================================
+     LEAFLET
+========================================================= -->
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+</script>
+
+
+
+<!-- =========================================================
+     LEAFLET GEOMAN
+========================================================= -->
+
+<script
+    src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.min.js">
+</script>
+
+
+
+<!-- =========================================================
+     TOPOJSON CLIENT
+========================================================= -->
+
+<script
+    src="https://unpkg.com/topojson-client@3">
+</script>
+
+
+
+<!-- =========================================================
+     TURF
+========================================================= -->
+
+<script
+    src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js">
+</script>
+
+
+
+<!-- =========================================================
+     JAVASCRIPT
+========================================================= -->
+
+<script src="./paraguay.js"></script>
+<script src="./paraguaydat.js"></script>
+
+
+
+</body>
+
+</html>

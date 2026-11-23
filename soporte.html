@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Mensajería Express - Soporte</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="soporte.css">
+</head>
+
+<body>
+
+
+    <header class="header">
+
+        <div class="logo">
+
+            <div class="logo-icono">
+                <i class="ri-tools-line"></i>
+            </div>
+
+            <div>
+                <h1>Soporte técnico</h1>
+                <span>Webcorp Business</span>
+            </div>
+
+        </div>
+
+
+        <div class="header-derecha">
+
+            <button type="button" id="btnSonido" class="btn-sonido">
+                <i class="ri-volume-up-line"></i>
+                Activar sonido
+            </button>
+
+            <button type="button" id="btnNotificaciones" class="btn-notificaciones">
+                <i class="ri-notification-3-line"></i>
+                Activar notificaciones
+            </button>
+
+
+            <button type="button" id="btnSalir" class="btn-notificaciones">
+                <i class="ri-notification-3-line"></i>
+                Salir
+            </button>
+
+
+            <div class="usuario-soporte">
+
+                <div class="usuario-soporte-icono">
+                    <i class="ri-user-settings-line"></i>
+                </div>
+
+                <div>
+
+                    <strong id="nombreUsuario">
+                        Usuario
+                    </strong>
+
+                    <span>
+                        Soporte
+                    </span>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </header>
+
+
+    <main class="contenedor">
+
+        <section class="bienvenida">
+
+            <div>
+
+                <span class="etiqueta">
+                    <i class="ri-shield-check-line"></i>
+                    Panel de soporte
+                </span>
+
+                <h2>
+                    Centro de tickets
+                </h2>
+
+                <p>
+                    Aquí aparecerán las solicitudes enviadas
+                    por los usuarios.
+                </p>
+
+            </div>
+
+            <div class="notificacion-nueva" id="notificacionNueva">
+
+                <div class="campana">
+
+                    <i class="ri-notification-3-line"></i>
+
+                    <span id="contadorNuevos">
+                        0
+                    </span>
+
+                </div>
+
+                <div>
+
+                    <strong id="textoNotificacion">
+                        Sin tickets nuevos
+                    </strong>
+
+                    <span>
+                        Notificaciones en tiempo real
+                    </span>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section class="estadisticas">
+
+            <div class="estadistica" id="tarjetaTotal" style="cursor: pointer;">
+
+                <div class="estadistica-icono">
+                    <i class="ri-ticket-2-line"></i>
+                </div>
+
+                <div>
+
+                    <span>
+                        Total
+                    </span>
+
+                    <strong id="totalTickets">
+                        0
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="estadistica" id="tarjetaPendientes" style="cursor: pointer;">
+
+                <div class="estadistica-icono pendiente">
+                    <i class="ri-time-line"></i>
+                </div>
+
+                <div>
+
+                    <span>
+                        Pendientes
+                    </span>
+
+                    <strong id="ticketsPendientes">
+                        0
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="estadistica" id="tarjetaRevision" style="cursor: pointer;">
+
+                <div class="estadistica-icono revision">
+                    <i class="ri-loader-4-line"></i>
+                </div>
+
+                <div>
+
+                    <span>
+                        En revisión
+                    </span>
+
+                    <strong id="ticketsRevision">
+                        0
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="estadistica" id="tarjetaResueltos" style="cursor: pointer;">
+
+                <div class="estadistica-icono resuelto">
+                    <i class="ri-checkbox-circle-line"></i>
+                </div>
+
+                <div>
+
+                    <span>
+                        Resueltos
+                    </span>
+
+                    <strong id="ticketsResueltos">
+                        0
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section class="barra">
+
+            <div class="busqueda">
+
+                <i class="ri-search-line"></i>
+
+                <input type="text" id="buscarTicket" placeholder="Buscar por nombre, asunto, ID o teléfono...">
+
+            </div>
+
+
+            <select id="filtroEstado">
+
+                <option value="Todos">
+                    Todos los estados
+                </option>
+
+                <option value="Pendiente">
+                    Pendientes
+                </option>
+
+                <option value="En revisión">
+                    En revisión
+                </option>
+
+                <option value="Resuelto">
+                    Resueltos
+                </option>
+            </select>
+
+
+            <select id="filtroPrioridad">
+
+                <option value="Todas">
+                    Todas las prioridades
+                </option>
+
+                <option value="Normal">
+                    Normal
+                </option>
+
+                <option value="Alta">
+                    Alta
+                </option>
+
+                <option value="Urgente">
+                    Urgente
+                </option>
+
+            </select>
+
+
+            <button type="button" id="btnActualizar" class="btn-actualizar">
+
+                <i class="ri-refresh-line"></i>
+
+                Actualizar
+
+            </button>
+
+        </section>
+
+
+        <section class="tickets">
+
+            <div class="tickets-cabecera">
+
+                <div>
+
+                    <h3>
+                        Tickets recibidos
+                    </h3>
+
+                    <span id="textoCantidad">
+                        0 tickets
+                    </span>
+
+                </div>
+
+                <div id="indicadorConexion" class="conexion conectado">
+
+                    <i class="ri-checkbox-circle-fill"></i>
+
+                    Conectado
+
+                </div>
+
+            </div>
+
+
+            <div id="listaTickets" class="lista-tickets"></div>
+
+
+            <div id="sinTickets" class="sin-tickets">
+
+                <div>
+
+                    <i class="ri-inbox-line"></i>
+
+                </div>
+
+                <h3>
+                    No hay tickets
+                </h3>
+
+                <p>
+                    Cuando un usuario envíe una solicitud
+                    aparecerá aquí.
+                </p>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <div id="modalTicket" class="modal">
+
+        <div class="modal-contenido">
+
+            <div class="modal-cabecera">
+
+                <div>
+
+                    <span id="modalNumero">
+                        Ticket #0
+                    </span>
+
+                    <h2 id="modalAsunto">
+                        Asunto
+                    </h2>
+
+                </div>
+
+                <button type="button" id="cerrarModal" class="cerrar-modal">
+
+                    <i class="ri-close-line"></i>
+
+                </button>
+
+            </div>
+
+
+            <div class="modal-usuario">
+
+                <div class="avatar">
+
+                    <i class="ri-user-line"></i>
+
+                </div>
+
+                <div>
+
+                    <strong id="modalNombre">
+                        Usuario
+                    </strong>
+
+                    <span id="modalCorreo">
+                        correo
+                    </span>
+
+                    <span id="modalTelefono">
+                        teléfono
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="datos-ticket">
+
+                <div>
+
+                    <span>
+                        Problema
+                    </span>
+
+                    <strong id="modalCategoria">
+                        -
+                    </strong>
+
+                </div>
+
+                <div>
+
+                    <span>
+                        Prioridad
+                    </span>
+
+                    <strong id="modalPrioridad">
+                        -
+                    </strong>
+
+                </div>
+
+                <div>
+
+                    <span>
+                        Estado
+                    </span>
+
+                    <strong id="modalEstado">
+                        -
+                    </strong>
+
+                </div>
+
+                <div>
+
+                    <span>
+                        Fecha
+                    </span>
+
+                    <strong id="modalFecha">
+                        -
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="descripcion-ticket">
+
+                <label>
+                    Descripción
+                </label>
+
+                <p id="modalDescripcion">
+                    -
+                </p>
+
+            </div>
+
+
+            <div id="modalArchivoContenedor" class="archivo-ticket">
+
+                <a id="modalArchivo" href="#" target="_blank">
+
+                    <i class="ri-attachment-2"></i>
+
+                    Ver archivo adjunto
+
+                </a>
+
+            </div>
+
+
+            <div class="estado-ticket">
+
+                <label for="estadoTicket">
+                    Estado del ticket
+                </label>
+
+                <select id="estadoTicket">
+
+                    <option value="Pendiente">
+                        Pendiente
+                    </option>
+
+                    <option value="En revisión">
+                        En revisión
+                    </option>
+
+                    <option value="Resuelto">
+                        Resuelto
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="respuesta-ticket">
+
+                <label for="respuestaTicket">
+                    Respuesta para el usuario
+                </label>
+
+                <textarea id="respuestaTicket" rows="5"
+                    placeholder="Escribe aquí la respuesta o solución..."></textarea>
+
+            </div>
+
+
+            <div class="modal-acciones">
+
+                <button type="button" id="btnCerrarTicket" class="btn-secundario">
+
+                    Cerrar
+
+                </button>
+
+                <button type="button" id="btnGuardarTicket" class="btn-principal">
+
+                    <i class="ri-save-line"></i>
+
+                    Guardar cambios
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div id="toast" class="toast">
+
+        <div class="toast-icono">
+
+            <i class="ri-notification-3-fill"></i>
+
+        </div>
+
+        <div>
+
+            <strong id="toastTitulo">
+                Nuevo ticket
+            </strong>
+
+            <span id="toastTexto">
+                Has recibido una nueva solicitud.
+            </span>
+
+        </div>
+
+        <button type="button" id="cerrarToast">
+
+            <i class="ri-close-line"></i>
+
+        </button>
+
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script src="soporte.js"></script>
+
+
+    <script>
+
+        document
+            .getElementById("tarjetaTotal")
+            .addEventListener(
+                "click",
+                function () {
+
+                    window.location.href =
+                        "total.html";
+
+                }
+            );
+
+
+        document
+            .getElementById("tarjetaPendientes")
+            .addEventListener(
+                "click",
+                function () {
+
+                    window.location.href =
+                        "Pendientes.html";
+
+                }
+            );
+
+
+        document
+            .getElementById("tarjetaRevision")
+            .addEventListener(
+                "click",
+                function () {
+
+                    window.location.href =
+                        "revision.html";
+
+                }
+            );
+
+
+        document
+            .getElementById("tarjetaResueltos")
+            .addEventListener(
+                "click",
+                function () {
+
+                    window.location.href =
+                        "resuelto.html";
+
+                }
+            );
+
+    </script>
+
+
+</body>
+
+</html>

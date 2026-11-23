@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Web Corp Business - Catálogo</title>
+
+    <!-- =====================================================
+         FONT AWESOME
+    ====================================================== -->
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <!-- =====================================================
+         CSS
+    ====================================================== -->
+
+    <link rel="stylesheet" href="catalogo.css">
+
+</head>
+
+<body>
+
+    <!-- =====================================================
+         HEADER
+    ====================================================== -->
+
+    <header class="header">
+
+        <div class="header-contenedor">
+
+            <!-- LOGO -->
+
+            <div class="logo">
+
+                <div class="logo-icon">
+                    <i class="fa-solid fa-building"></i>
+                </div>
+
+                <div class="logo-texto">
+
+                    <span class="logo-principal">
+                        WEBCORP
+                    </span>
+
+                    <span class="logo-secundario">
+                        BUSINESS
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- BUSCADOR -->
+
+            <div class="buscador">
+
+                <input type="text" id="buscadorProductos"
+                    placeholder="Buscar producto, código o nombre..."
+                    autocomplete="off">
+
+                <button id="btnBuscar" type="button">
+
+                    <i class="fa-solid fa-magnifying-glass"></i>
+
+                </button>
+
+            </div>
+
+
+            <!-- CONTACTO -->
+
+            <button class="btn-contacto" type="button">
+
+                <i class="fa-solid fa-headset"></i>
+
+                <span>
+                    Contacto
+                </span>
+
+            </button>
+
+
+            <button class="btn-contacto" type="button"
+                onclick="window.location.href='panel.html'">
+
+                <i class="fa-solid fa-arrow-left"></i>
+
+                <span>
+                    Regresar
+                </span>
+
+            </button>
+
+        </div>
+
+    </header>
+
+
+    <!-- =====================================================
+         NAVEGACIÓN DE CATEGORÍAS
+    ====================================================== -->
+
+    <nav class="categorias">
+
+        <div class="categorias-contenedor">
+
+            <button class="categoria-btn activo"
+                data-categoria="todos"
+                type="button">
+
+                <i class="fa-solid fa-border-all"></i>
+
+                Todos
+
+            </button>
+
+
+            <button class="categoria-btn"
+                data-categoria="bienestar"
+                type="button">
+
+                <i class="fa-solid fa-heart-pulse"></i>
+
+                Bienestar
+
+            </button>
+
+
+            <button class="categoria-btn"
+                data-categoria="digestivo"
+                type="button">
+
+                <i class="fa-solid fa-leaf"></i>
+
+                Digestivo
+
+            </button>
+
+
+            <button class="categoria-btn"
+                data-categoria="articulaciones"
+                type="button">
+
+                <i class="fa-solid fa-person-walking"></i>
+
+                Articulaciones
+
+            </button>
+
+
+            <button class="categoria-btn"
+                data-categoria="control"
+                type="button">
+
+                <i class="fa-solid fa-chart-line"></i>
+
+                Control
+
+            </button>
+
+
+            <button class="categoria-btn"
+                data-categoria="urinario"
+                type="button">
+
+                <i class="fa-solid fa-droplet"></i>
+
+                Urinario
+
+            </button>
+
+
+            <button class="categoria-btn"
+                data-categoria="masculino"
+                type="button">
+
+                <i class="fa-solid fa-person"></i>
+
+                Masculino
+
+            </button>
+
+
+            <button class="categoria-btn"
+                data-categoria="otros"
+                type="button">
+
+                <i class="fa-solid fa-box"></i>
+
+                Otros
+
+            </button>
+
+        </div>
+
+    </nav>
+
+
+    <!-- =====================================================
+         CONTENIDO PRINCIPAL
+    ====================================================== -->
+
+    <main class="contenido">
+
+        <!-- ENCABEZADO -->
+
+        <section class="encabezado-catalogo">
+
+            <div>
+
+                <span class="etiqueta">
+                    CATÁLOGO DE PRODUCTOS
+                </span>
+
+                <h1>
+                    Nuestros productos
+                </h1>
+
+                <p>
+                    Consulta la información y características de cada producto.
+                </p>
+
+            </div>
+
+            <div class="contador-productos">
+
+                <i class="fa-solid fa-box-open"></i>
+
+                <span id="contadorProductos">
+                    0 productos
+                </span>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             CATÁLOGO
+        ================================================== -->
+
+        <section id="catalogoProductos"
+            class="catalogo-productos">
+
+            <!--
+                Los productos se cargan automáticamente
+                desde public.catalogo_productos
+                mediante catalogo.js
+            -->
+
+        </section>
+
+
+        <!-- =====================================================
+             SIN RESULTADOS
+        ====================================================== -->
+
+        <div id="sinResultados"
+            class="sin-resultados">
+
+            <i class="fa-solid fa-box-open"></i>
+
+            <h2>
+                No encontramos productos
+            </h2>
+
+            <p>
+                Intenta con otro nombre, código o categoría.
+            </p>
+
+        </div>
+
+    </main>
+
+
+    <!-- =====================================================
+         MODAL DE PRODUCTO
+    ====================================================== -->
+
+    <div id="modalProducto"
+        class="modal-producto"
+        aria-hidden="true">
+
+        <div class="modal-contenido">
+
+
+            <!-- =================================================
+                 BOTÓN CERRAR
+            ================================================== -->
+
+            <button id="cerrarModal"
+                class="cerrar-modal"
+                type="button"
+                aria-label="Cerrar">
+
+                <i class="fa-solid fa-xmark"></i>
+
+            </button>
+
+
+            <!-- =================================================
+                 GALERÍA
+            ================================================== -->
+
+            <div class="modal-galeria">
+
+                <div class="modal-imagen-principal">
+
+                    <img id="modalImagenPrincipal"
+                        src=""
+                        alt="Producto">
+
+
+                    <!-- ANTERIOR -->
+
+                    <button id="imagenAnterior"
+                        class="galeria-flecha anterior"
+                        type="button"
+                        aria-label="Imagen anterior">
+
+                        <i class="fa-solid fa-chevron-left"></i>
+
+                    </button>
+
+
+                    <!-- SIGUIENTE -->
+
+                    <button id="imagenSiguiente"
+                        class="galeria-flecha siguiente"
+                        type="button"
+                        aria-label="Imagen siguiente">
+
+                        <i class="fa-solid fa-chevron-right"></i>
+
+                    </button>
+
+                </div>
+
+
+                <!-- =================================================
+                     6 MINIATURAS
+                ================================================== -->
+
+                <div class="miniaturas">
+
+                    <button id="miniatura1"
+                        class="miniatura activa"
+                        type="button">
+
+                        <img src=""
+                            alt="Vista 1">
+
+                    </button>
+
+
+                    <button id="miniatura2"
+                        class="miniatura"
+                        type="button">
+
+                        <img src=""
+                            alt="Vista 2">
+
+                    </button>
+
+
+                    <button id="miniatura3"
+                        class="miniatura"
+                        type="button">
+
+                        <img src=""
+                            alt="Vista 3">
+
+                    </button>
+
+
+                    <button id="miniatura4"
+                        class="miniatura"
+                        type="button">
+
+                        <img src=""
+                            alt="Vista 4">
+
+                    </button>
+
+
+                    <button id="miniatura5"
+                        class="miniatura"
+                        type="button">
+
+                        <img src=""
+                            alt="Vista 5">
+
+                    </button>
+
+
+                    <button id="miniatura6"
+                        class="miniatura"
+                        type="button">
+
+                        <img src=""
+                            alt="Vista 6">
+
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+                 INFORMACIÓN
+            ================================================== -->
+
+            <div class="modal-informacion">
+
+                <span id="modalCodigo"
+                    class="modal-codigo">
+
+                    COD-000
+
+                </span>
+
+
+                <h2 id="modalNombre">
+                    Producto
+                </h2>
+
+
+                <!-- =================================================
+                     PROVEEDOR
+                ================================================== -->
+
+                <div id="modalProveedor"
+                    class="modal-proveedor">
+
+                    <i class="fa-solid fa-building"></i>
+
+                    <span>
+
+                        <strong>Proveedor:</strong>
+
+                        <span id="modalProveedorTexto">
+                            No especificado
+                        </span>
+
+                    </span>
+
+                </div>
+
+
+                <div class="separador-modal"></div>
+
+
+                <!-- =================================================
+                     DESCRIPCIÓN
+                ================================================== -->
+
+                <div class="modal-seccion">
+
+                    <h3>
+
+                        <i class="fa-solid fa-circle-info"></i>
+
+                        Descripción
+
+                    </h3>
+
+                    <p id="modalDescripcion">
+
+                        Información del producto.
+
+                    </p>
+
+                </div>
+
+
+                <!-- =================================================
+                     CARACTERÍSTICAS
+                ================================================== -->
+
+                <div class="modal-seccion">
+
+                    <h3>
+
+                        <i class="fa-solid fa-list-check"></i>
+
+                        Características
+
+                    </h3>
+
+                    <ul id="modalCaracteristicas"></ul>
+
+                </div>
+
+
+                <!-- =================================================
+                     CONTRAINDICACIONES
+                ================================================== -->
+
+                <div class="modal-seccion">
+
+                    <h3>
+
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+
+                        Contraindicaciones
+
+                    </h3>
+
+                    <p id="modalContraindicaciones">
+
+                        Consulte la información del producto y las indicaciones
+                        del fabricante antes de utilizarlo. Si tiene dudas,
+                        consulte con un profesional de la salud.
+
+                    </p>
+
+                </div>
+
+
+                <!-- =================================================
+                     AVISO
+                ================================================== -->
+
+                <div class="modal-aviso">
+
+                    <i class="fa-solid fa-circle-info"></i>
+
+                    <span>
+
+                        Este catálogo es únicamente informativo.
+                        Para consultar disponibilidad, precio o información
+                        adicional, contacte con el vendedor.
+
+                    </span>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         FOOTER
+    ====================================================== -->
+
+    <footer class="footer">
+
+        <div class="footer-contenedor">
+
+            <div class="footer-logo">
+                WEBCORP BUSINESS
+            </div>
+
+            <p>
+                Catálogo de productos para consulta de vendedores.
+            </p>
+
+            <span>
+                © 2026 WebCorp Business. Todos los derechos reservados.
+            </span>
+
+        </div>
+
+    </footer>
+
+
+    <!-- =====================================================
+         SUPABASE
+    ====================================================== -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+
+    <!-- =====================================================
+         JAVASCRIPT DEL CATÁLOGO
+    ====================================================== -->
+
+    <script src="catalogo2.0.js"></script>
+
+</body>
+
+</html>

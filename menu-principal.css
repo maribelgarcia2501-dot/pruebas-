@@ -1,0 +1,619 @@
+/* =========================================================
+   WEBCORP BUSINESS
+   MENÚ PRINCIPAL
+========================================================= */
+
+
+/* =========================================================
+   CONFIGURACIÓN GENERAL
+========================================================= */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f4f6f9;
+    color: #202938;
+}
+
+
+/* =========================================================
+   PANTALLA
+========================================================= */
+
+.pantalla {
+    min-height: 100vh;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 30px 20px;
+}
+
+
+/* =========================================================
+   PANEL PRINCIPAL
+========================================================= */
+
+.panel-menu {
+    width: 100%;
+    max-width: 900px;
+
+    background: #ffffff;
+
+    border-radius: 22px;
+
+    padding: 35px;
+
+    box-shadow:
+        0 15px 40px rgba(0, 0, 0, 0.08);
+}
+
+
+/* =========================================================
+   LOGO
+========================================================= */
+
+.logo {
+    width: 65px;
+    height: 65px;
+
+    margin: 0 auto 15px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 18px;
+
+    background: #2563eb;
+    color: #ffffff;
+
+    font-size: 32px;
+
+    box-shadow:
+        0 8px 20px rgba(37, 99, 235, 0.25);
+}
+
+
+/* =========================================================
+   ENCABEZADO
+========================================================= */
+
+.encabezado {
+    text-align: center;
+}
+
+.encabezado h1 {
+    font-size: 28px;
+    font-weight: 700;
+
+    color: #172033;
+}
+
+.encabezado p {
+    margin-top: 6px;
+
+    font-size: 14px;
+
+    color: #7a8494;
+}
+
+
+/* =========================================================
+   SEPARADOR
+========================================================= */
+
+.separador {
+    width: 100%;
+    height: 1px;
+
+    margin: 25px 0;
+
+    background: #e6e9ef;
+}
+
+
+/* =========================================================
+   USUARIO LOGUEADO
+========================================================= */
+
+.usuario-logueado {
+    width: 100%;
+    max-width: 600px;
+
+    margin: 0 auto 25px;
+
+    padding: 13px 15px;
+
+    display: flex;
+    align-items: center;
+
+    gap: 12px;
+
+    background: #f7f9fc;
+
+    border: 1px solid #e3e7ee;
+
+    border-radius: 14px;
+
+    transition: 0.2s ease;
+}
+
+.usuario-logueado:hover {
+    border-color: #d5dbe5;
+
+    box-shadow:
+        0 5px 15px rgba(0, 0, 0, 0.04);
+}
+
+
+/* =========================================================
+   ICONO USUARIO
+========================================================= */
+
+.usuario-icono {
+    width: 44px;
+    height: 44px;
+
+    min-width: 44px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: #e9f0ff;
+
+    color: #2563eb;
+
+    font-size: 21px;
+}
+
+
+/* =========================================================
+   INFORMACIÓN DEL USUARIO
+========================================================= */
+
+.usuario-info {
+    flex: 1;
+
+    min-width: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 2px;
+}
+
+.usuario-info span {
+    font-size: 11px;
+
+    color: #7a8494;
+
+    font-weight: 500;
+}
+
+.usuario-info strong {
+    font-size: 15px;
+
+    color: #202938;
+
+    font-weight: 700;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+}
+
+.usuario-info small {
+    font-size: 12px;
+
+    color: #7a8494;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+}
+
+
+/* =========================================================
+   BOTÓN CERRAR SESIÓN
+========================================================= */
+
+#btnCerrarSesion {
+    width: 40px;
+    height: 40px;
+
+    min-width: 40px;
+
+    border: none;
+
+    border-radius: 10px;
+
+    background: #fff0f0;
+
+    color: #dc2626;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    cursor: pointer;
+
+    font-size: 19px;
+
+    transition: 0.2s ease;
+}
+
+#btnCerrarSesion:hover {
+    background: #dc2626;
+
+    color: #ffffff;
+
+    transform: translateY(-1px);
+}
+
+#btnCerrarSesion:active {
+    transform: scale(0.95);
+}
+
+#btnCerrarSesion:disabled {
+    opacity: 0.6;
+
+    cursor: not-allowed;
+
+    transform: none;
+}
+
+
+/* =========================================================
+   TÍTULO DEL MENÚ
+========================================================= */
+
+.titulo-menu {
+    text-align: center;
+
+    margin-bottom: 25px;
+}
+
+.titulo-menu h2 {
+    font-size: 22px;
+
+    color: #202938;
+}
+
+.titulo-menu p {
+    margin-top: 5px;
+
+    font-size: 13px;
+
+    color: #7a8494;
+}
+
+
+/* =========================================================
+   TARJETAS
+========================================================= */
+
+.menu-tarjetas {
+    display: grid;
+
+    grid-template-columns:
+        repeat(4, 1fr);
+
+    gap: 16px;
+}
+
+
+/* =========================================================
+   TARJETA
+========================================================= */
+
+.tarjeta {
+    min-height: 145px;
+
+    padding: 20px;
+
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+
+    text-decoration: none;
+
+    background: #ffffff;
+
+    border: 1px solid #e4e8ef;
+
+    border-radius: 16px;
+
+    color: #202938;
+
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease,
+        border-color 0.2s ease;
+}
+
+.tarjeta:hover {
+    transform: translateY(-4px);
+
+    box-shadow:
+        0 10px 25px rgba(0, 0, 0, 0.08);
+
+    border-color: #d6dce5;
+}
+
+
+/* =========================================================
+   ICONO DE TARJETA
+========================================================= */
+
+.tarjeta-icono {
+    width: 48px;
+    height: 48px;
+
+    margin-bottom: 12px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 13px;
+
+    background: #f1f4f8;
+
+    color: #2563eb;
+
+    font-size: 24px;
+
+    transition: 0.2s ease;
+}
+
+.tarjeta:hover .tarjeta-icono {
+    transform: scale(1.05);
+}
+
+
+/* =========================================================
+   TEXTO TARJETA
+========================================================= */
+
+.tarjeta span {
+    font-size: 15px;
+
+    font-weight: 700;
+
+    color: #202938;
+}
+
+.tarjeta small {
+    margin-top: 5px;
+
+    font-size: 11px;
+
+    color: #7a8494;
+}
+
+
+/* =========================================================
+   COLORES DE TARJETAS
+========================================================= */
+
+.tarjeta[data-color="azul"] .tarjeta-icono {
+    color: #2563eb;
+    background: #eaf1ff;
+}
+
+.tarjeta[data-color="morado"] .tarjeta-icono {
+    color: #7c3aed;
+    background: #f1eaff;
+}
+
+.tarjeta[data-color="verde"] .tarjeta-icono {
+    color: #16a34a;
+    background: #eaf8ee;
+}
+
+.tarjeta[data-color="naranja"] .tarjeta-icono {
+    color: #ea580c;
+    background: #fff0e8;
+}
+
+.tarjeta[data-color="celeste"] .tarjeta-icono {
+    color: #0891b2;
+    background: #e7f8fb;
+}
+
+.tarjeta[data-color="verdeclaro"] .tarjeta-icono {
+    color: #059669;
+    background: #e8f8f2;
+}
+
+.tarjeta[data-color="rojo"] .tarjeta-icono {
+    color: #dc2626;
+    background: #ffeded;
+}
+
+
+/* =========================================================
+   PIE
+========================================================= */
+
+.pie {
+    margin-top: 30px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 8px;
+
+    font-size: 12px;
+
+    color: #8a94a4;
+}
+
+.pie i {
+    font-size: 15px;
+
+    color: #2563eb;
+}
+
+.punto {
+    color: #b4bac4;
+}
+
+
+/* =========================================================
+   RESPONSIVE - TABLET
+========================================================= */
+
+@media (max-width: 800px) {
+
+    .panel-menu {
+        padding: 28px;
+    }
+
+    .menu-tarjetas {
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+
+}
+
+
+/* =========================================================
+   RESPONSIVE - TELÉFONO
+========================================================= */
+
+@media (max-width: 520px) {
+
+    .pantalla {
+        padding: 15px;
+    }
+
+    .panel-menu {
+        padding: 22px 16px;
+
+        border-radius: 18px;
+    }
+
+    .logo {
+        width: 58px;
+        height: 58px;
+
+        font-size: 28px;
+    }
+
+    .encabezado h1 {
+        font-size: 23px;
+    }
+
+    .encabezado p {
+        font-size: 13px;
+    }
+
+    .usuario-logueado {
+        padding: 11px;
+
+        gap: 9px;
+    }
+
+    .usuario-icono {
+        width: 40px;
+        height: 40px;
+
+        min-width: 40px;
+
+        font-size: 19px;
+    }
+
+    .usuario-info strong {
+        font-size: 14px;
+    }
+
+    .usuario-info small {
+        font-size: 11px;
+    }
+
+    #btnCerrarSesion {
+        width: 36px;
+        height: 36px;
+
+        min-width: 36px;
+
+        font-size: 17px;
+    }
+
+    .titulo-menu h2 {
+        font-size: 20px;
+    }
+
+    .menu-tarjetas {
+        grid-template-columns: 1fr 1fr;
+
+        gap: 10px;
+    }
+
+    .tarjeta {
+        min-height: 125px;
+
+        padding: 14px 8px;
+    }
+
+    .tarjeta-icono {
+        width: 42px;
+        height: 42px;
+
+        margin-bottom: 9px;
+
+        font-size: 21px;
+    }
+
+    .tarjeta span {
+        font-size: 13px;
+    }
+
+    .tarjeta small {
+        font-size: 10px;
+    }
+
+    .pie {
+        flex-wrap: wrap;
+
+        margin-top: 22px;
+    }
+
+}
+
+
+/* =========================================================
+   TELÉFONOS MUY PEQUEÑOS
+========================================================= */
+
+@media (max-width: 350px) {
+
+    .menu-tarjetas {
+        grid-template-columns: 1fr;
+    }
+
+    .usuario-info small {
+        max-width: 150px;
+    }
+
+}

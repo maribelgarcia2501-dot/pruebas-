@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>
+        Mensajería Express - Todos los tickets
+    </title>
+
+
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css" rel="stylesheet">
+
+
+    <link rel="stylesheet" href="soporte.css">
+    <link rel="stylesheet" href="total.css">
+
+</head>
+
+
+<body>
+
+
+    <!-- =====================================================
+         HEADER
+    ====================================================== -->
+
+    <header class="header">
+
+
+        <div class="logo">
+
+            <div class="logo-icono">
+
+                <i class="ri-ticket-2-line"></i>
+
+            </div>
+
+
+            <div>
+
+                <h1>
+                    Todos los tickets
+                </h1>
+
+                <span>
+                    Mensajería Express - Soporte
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="header-derecha">
+
+
+            <!-- =================================================
+                 SONIDO
+            ================================================== -->
+
+            <button type="button" class="btn-sonido" id="btnSonido">
+
+                <i class="ri-volume-up-line"></i>
+
+                Activar sonido
+
+            </button>
+
+
+            <!-- =================================================
+                 USUARIO DE SOPORTE
+            ================================================== -->
+
+            <div class="usuario-soporte">
+
+
+                <div class="usuario-soporte-icono">
+
+                    <i class="ri-user-settings-line"></i>
+
+                </div>
+
+
+                <div>
+
+                    <!--
+                        total.js colocará aquí
+                        el nombre real del usuario
+                        autenticado.
+                    -->
+
+                    <strong id="nombreUsuario">
+                        Usuario
+                    </strong>
+
+
+                    <span>
+                        Soporte
+                    </span>
+
+                </div>
+
+
+            </div>
+
+
+        </div>
+
+
+    </header>
+
+
+
+    <!-- =====================================================
+         CONTENIDO PRINCIPAL
+    ====================================================== -->
+
+    <main class="contenedor">
+
+
+        <!-- =================================================
+             BIENVENIDA
+        ================================================== -->
+
+        <section class="bienvenida">
+
+
+            <div>
+
+
+                <span class="etiqueta">
+
+                    <i class="ri-ticket-2-line"></i>
+
+                    Todos los tickets
+
+                </span>
+
+
+                <h2>
+                    Tickets recibidos
+                </h2>
+
+
+                <p>
+                    Aquí se muestran todos los tickets enviados por los Back Office.
+                </p>
+
+
+            </div>
+
+
+        </section>
+
+
+
+        <!-- =================================================
+             BARRA DE HERRAMIENTAS
+        ================================================== -->
+
+        <section class="barra">
+
+
+            <div class="busqueda">
+
+
+                <i class="ri-search-line"></i>
+
+
+                <input type="text" id="buscarTicket" placeholder="Buscar por nombre, asunto, ID o teléfono...">
+
+
+            </div>
+
+
+
+            <button type="button" class="btn-actualizar" id="btnActualizar">
+
+                <i class="ri-refresh-line"></i>
+
+                Actualizar
+
+            </button>
+
+
+
+            <button type="button" class="btn-actualizar" onclick="window.location.href='soporte.html'">
+
+                <i class="ri-arrow-left-line"></i>
+
+                Volver
+
+            </button>
+
+
+        </section>
+
+
+
+        <!-- =================================================
+             LISTA DE TICKETS
+        ================================================== -->
+
+        <section class="tickets">
+
+
+            <div class="tickets-cabecera">
+
+
+                <div>
+
+
+                    <h3>
+                        Todos los tickets
+                    </h3>
+
+
+                    <span id="textoCantidad">
+                        0 tickets
+                    </span>
+
+
+                </div>
+
+
+
+                <!-- =================================================
+                     ESTADO DE CONEXIÓN
+                ================================================== -->
+
+                <div id="indicadorConexion" class="conexion conectado">
+
+                    <i class="ri-checkbox-circle-fill"></i>
+
+                    Conectado
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 TICKETS
+            ================================================== -->
+
+            <div id="listaTickets" class="lista-tickets"></div>
+
+
+
+            <!-- =================================================
+                 SIN TICKETS
+            ================================================== -->
+
+            <div id="sinTickets" class="sin-tickets">
+
+
+                <div>
+
+                    <i class="ri-inbox-line"></i>
+
+                </div>
+
+
+                <h3>
+                    No hay tickets
+                </h3>
+
+
+                <p>
+                    No hay tickets registrados.
+                </p>
+
+
+            </div>
+
+
+        </section>
+
+
+    </main>
+
+
+
+    <!-- =====================================================
+         MODAL DEL TICKET
+    ====================================================== -->
+
+    <div id="modalTicket" class="modal">
+
+
+        <div class="modal-contenido">
+
+
+            <!-- =================================================
+                 CABECERA DEL MODAL
+            ================================================== -->
+
+            <div class="modal-cabecera">
+
+
+                <div>
+
+
+                    <span id="modalNumero">
+                        Ticket #0
+                    </span>
+
+
+                    <h2 id="modalAsunto">
+                        Asunto
+                    </h2>
+
+
+                </div>
+
+
+
+                <button type="button" id="cerrarModal" class="cerrar-modal">
+
+                    <i class="ri-close-line"></i>
+
+                </button>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 USUARIO QUE CREÓ EL TICKET
+
+                 IMPORTANTE:
+                 Este NO es el usuario de soporte.
+                 Es el Back Office que creó el ticket.
+            ================================================== -->
+
+            <div class="modal-usuario">
+
+
+                <div class="avatar">
+
+                    <i class="ri-user-line"></i>
+
+                </div>
+
+
+                <div>
+
+
+                    <strong id="modalNombre">
+                        Usuario
+                    </strong>
+
+
+                    <span id="modalCorreo">
+                        correo
+                    </span>
+
+
+                    <span id="modalTelefono">
+                        teléfono
+                    </span>
+
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 DATOS DEL TICKET
+            ================================================== -->
+
+            <div class="datos-ticket">
+
+
+                <div>
+
+                    <span>
+                        Problema
+                    </span>
+
+                    <strong id="modalCategoria">
+                        -
+                    </strong>
+
+                </div>
+
+
+
+                <div>
+
+                    <span>
+                        Prioridad
+                    </span>
+
+                    <strong id="modalPrioridad">
+                        -
+                    </strong>
+
+                </div>
+
+
+
+                <div>
+
+                    <span>
+                        Estado
+                    </span>
+
+                    <strong id="modalEstado">
+                        -
+                    </strong>
+
+                </div>
+
+
+
+                <div>
+
+                    <span>
+                        Fecha
+                    </span>
+
+                    <strong id="modalFecha">
+                        -
+                    </strong>
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 DESCRIPCIÓN
+            ================================================== -->
+
+            <div class="descripcion-ticket">
+
+
+                <label>
+                    Descripción
+                </label>
+
+
+                <p id="modalDescripcion">
+                    -
+                </p>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 ARCHIVO ADJUNTO
+            ================================================== -->
+
+            <div id="modalArchivoContenedor" class="archivo-ticket">
+
+
+                <a id="modalArchivo" href="#" target="_blank">
+
+                    <i class="ri-attachment-2"></i>
+
+                    Ver archivo adjunto
+
+                </a>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 CAMBIAR ESTADO
+            ================================================== -->
+
+            <div class="estado-ticket">
+
+
+                <label for="estadoTicket">
+                    Estado del ticket
+                </label>
+
+
+                <select id="estadoTicket">
+
+
+                    <option value="Pendiente">
+                        Pendiente
+                    </option>
+
+
+                    <option value="En revisión">
+                        En revisión
+                    </option>
+
+
+                    <option value="Resuelto">
+                        Resuelto
+                    </option>
+
+
+                    <option value="Cerrado">
+                        Cerrado
+                    </option>
+
+
+                </select>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 RESPUESTA
+            ================================================== -->
+
+            <div class="respuesta-ticket">
+
+
+                <label for="respuestaTicket">
+                    Respuesta para el usuario
+                </label>
+
+
+                <textarea id="respuestaTicket" rows="5"
+                    placeholder="Escribe aquí la respuesta o solución..."></textarea>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 ACCIONES
+            ================================================== -->
+
+            <div class="modal-acciones">
+
+
+                <button type="button" id="btnCerrarTicket" class="btn-secundario">
+
+                    Cerrar
+
+                </button>
+
+
+
+                <button type="button" id="btnGuardarTicket" class="btn-principal">
+
+                    <i class="ri-save-line"></i>
+
+                    Guardar cambios
+
+                </button>
+
+
+            </div>
+
+
+        </div>
+
+
+    </div>
+
+
+
+    <!-- =====================================================
+         SCRIPTS
+    ====================================================== -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+
+    <script src="total.js"></script>
+
+
+</body>
+
+</html>

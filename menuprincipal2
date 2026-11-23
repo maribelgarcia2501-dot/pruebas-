@@ -1,0 +1,925 @@
+
+"use strict";
+
+/* =========================================================
+   WEBCORP BUSINESS
+   MENÚ PRINCIPAL DE LA INTRANET
+
+   TABLAS RECONOCIDAS:
+   - analistas
+   - back_offices
+   - bodega
+   - contabilidad
+   - jefes
+   - meg
+   - marketing
+   - recursos
+   - usuarios (IT)
+   - it2
+   - perfiles (soporte y clientes)
+
+   MUESTRA:
+   - Nombre y apellido arriba.
+   - Correo electrónico abajo.
+   - Área y rol del usuario.
+
+   IMPORTANTE:
+   Usa la sesión central de Supabase y los datos
+   guardados por inicio20.js.
+========================================================= */
+
+
+/* =========================================================
+   CONFIGURACIÓN SUPABASE
+========================================================= */
+
+const SUPABASE_URL =
+    "https://kayzwwgmebtsaiovkeos.supabase.co";
+
+const SUPABASE_KEY =
+    "sb_publishable_yj-QjGhy6RQNUzoxg3HQeg_hkZHuSyL";
+
+const supabaseClient = supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY,
+    {
+        auth: {
+            storageKey: "mensajeria-intranet-auth",
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: false
+        }
+    }
+);
+
+
+/* =========================================================
+   CONFIGURACIÓN DE LAS ÁREAS
+========================================================= */
+
+const CONFIGURACION_AREAS_MENU = [
+
+    {
+        tabla: "analistas",
+        columna: "id",
+        almacenamiento: "analista",
+        nombre: "Analistas"
+    },
+
+    {
+        tabla: "back_offices",
+        columna: "usuario_id",
+        almacenamiento: "back_office",
+        nombre: "Back Office"
+    },
+
+    {
+        tabla: "bodega",
+        columna: "id",
+        almacenamiento: "bodega",
+        nombre: "Bodega"
+    },
+
+    {
+        tabla: "contabilidad",
+        columna: "id",
+        almacenamiento: "contabilidad",
+        nombre: "Contabilidad"
+    },
+
+    {
+        tabla: "jefes",
+        columna: "id",
+        almacenamiento: "jefe",
+        nombre: "Jefes"
+    },
+
+    {
+        tabla: "meg",
+        columna: "id",
+        almacenamiento: "meg",
+        nombre: "MEG"
+    },
+
+    {
+        tabla: "marketing",
+        columna: "id",
+        almacenamiento: "marketing",
+        nombre: "Marketing"
+    },
+
+    {
+        tabla: "recursos",
+        columna: "id",
+        almacenamiento: "recursos",
+        nombre: "Recursos"
+    },
+
+    {
+        tabla: "usuarios",
+        columna: "id",
+        almacenamiento: "it",
+        nombre: "IT"
+    },
+
+    {
+        tabla: "it2",
+        columna: "id",
+        almacenamiento: "it2",
+        nombre: "IT 2"
+    }
+
+];
+
+
+/* =========================================================
+   CARGAR USUARIO LOGUEADO
+========================================================= */
+
+async function cargarUsuario() {
+
+    try {
+
+        console.log("========================================");
+        console.log("Verificando usuario logueado...");
+
+
+        /* =============================================
+           OBTENER SESIÓN DE SUPABASE
+        ============================================= */
+
+        const {
+            data,
+            error
+        } = await supabaseClient.auth.getSession();
+
+        if (error) {
+            throw error;
+        }
+
+        const session = data.session;
+
+        if (!session || !session.user) {
+
+            console.warn("No hay usuario logueado.");
+
+            window.location.href = "index.html";
+
+            return;
+        }
+
+        const usuario = session.user;
+
+        const correoUsuario =
+            usuario.email || "";
+
+
+        console.log(
+            "USUARIO LOGUEADO:",
+            usuario.id,
+            correoUsuario
+        );
+
+
+        /* =============================================
+           RECUPERAR DATOS GUARDADOS POR INICIO20.JS
+        ============================================= */
+
+        let usuarioGuardado = {};
+
+        try {
+
+            usuarioGuardado = JSON.parse(
+                sessionStorage.getItem("usuarioIntranet") || "{}"
+            );
+
+        } catch (error) {
+
+            console.warn(
+                "No se pudieron leer los datos guardados:",
+                error
+            );
+
+        }
+
+
+        /* =============================================
+           MOSTRAR DATOS GUARDADOS INMEDIATAMENTE
+        ============================================= */
+
+        if (
+            usuarioGuardado.nombreCompleto &&
+            usuarioGuardado.nombreCompleto !== "Usuario"
+        ) {
+
+            mostrarNombre(
+                usuarioGuardado.nombreCompleto
+            );
+
+        }
+
+        mostrarCorreo(
+            usuarioGuardado.correo || correoUsuario
+        );
+
+
+        /* =============================================
+           BUSCAR EL ÁREA DEL USUARIO
+        ============================================= */
+
+        let resultadoArea = null;
+
+
+        /*
+           Verificar que los datos guardados pertenezcan
+           al usuario que tiene la sesión actual.
+        */
+
+        const datosGuardadosSonDelUsuario =
+            usuarioGuardado.id === usuario.id ||
+            usuarioGuardado.usuario_id === usuario.id;
+
+
+        if (
+            datosGuardadosSonDelUsuario &&
+            usuarioGuardado.area
+        ) {
+
+            const configuracionGuardada =
+                CONFIGURACION_AREAS_MENU.find(
+                    area =>
+                        area.almacenamiento ===
+                        usuarioGuardado.area
+                );
+
+            if (configuracionGuardada) {
+
+                resultadoArea = {
+
+                    datos: usuarioGuardado,
+
+                    tabla:
+                        usuarioGuardado.tabla ||
+                        configuracionGuardada.tabla,
+
+                    almacenamiento:
+                        configuracionGuardada.almacenamiento,
+
+                    nombre:
+                        configuracionGuardada.nombre
+
+                };
+
+            }
+
+        }
+
+
+        /*
+           Si no hay datos guardados válidos,
+           buscar directamente en todas las tablas.
+        */
+
+        if (!resultadoArea) {
+
+            resultadoArea =
+                await buscarUsuarioEnTodasLasAreas(
+                    usuario.id
+                );
+
+        }
+
+
+        /* =============================================
+           USUARIO ENCONTRADO EN ALGUNA ÁREA
+        ============================================= */
+
+        if (resultadoArea) {
+
+            const datos = resultadoArea.datos;
+
+            const nombreCompleto =
+                obtenerNombreCompleto(datos);
+
+            const correo =
+                datos.correo ||
+                datos.email ||
+                correoUsuario;
+
+
+            const usuarioFinal = {
+
+                id:
+                    datos.id ||
+                    datos.usuario_id ||
+                    usuario.id,
+
+                usuario_id:
+                    datos.usuario_id ||
+                    datos.id ||
+                    usuario.id,
+
+                nombre:
+                    datos.nombre ||
+                    datos.nombres ||
+                    usuarioGuardado.nombre ||
+                    "",
+
+                apellido:
+                    datos.apellido ||
+                    datos.apellidos ||
+                    usuarioGuardado.apellido ||
+                    "",
+
+                nombreCompleto:
+                    nombreCompleto ||
+                    usuarioGuardado.nombreCompleto ||
+                    "Usuario",
+
+                correo:
+                    correo,
+
+                telefono:
+                    datos.telefono ||
+                    usuarioGuardado.telefono ||
+                    "",
+
+                area:
+                    resultadoArea.almacenamiento,
+
+                tabla:
+                    resultadoArea.tabla,
+
+                rol:
+                    resultadoArea.nombre
+
+            };
+
+
+            /* GUARDAR INFORMACIÓN ACTUALIZADA */
+
+            sessionStorage.setItem(
+                "usuarioIntranet",
+                JSON.stringify(usuarioFinal)
+            );
+
+            sessionStorage.setItem(
+                "areaUsuario",
+                resultadoArea.almacenamiento
+            );
+
+            sessionStorage.setItem(
+                resultadoArea.almacenamiento,
+                JSON.stringify(usuarioFinal)
+            );
+
+
+            /* MOSTRAR NOMBRE Y CORREO */
+
+            mostrarNombre(
+                usuarioFinal.nombreCompleto
+            );
+
+            mostrarCorreo(
+                usuarioFinal.correo
+            );
+
+
+            console.log(
+                "PERFIL ENCONTRADO:",
+                usuarioFinal
+            );
+
+            console.log(
+                "ROL DETECTADO:",
+                usuarioFinal.rol
+            );
+
+            console.log(
+                "ÁREA:",
+                usuarioFinal.area
+            );
+
+            console.log(
+                "NOMBRE:",
+                usuarioFinal.nombreCompleto
+            );
+
+            console.log(
+                "CORREO:",
+                usuarioFinal.correo
+            );
+
+            console.log(
+                "El usuario puede permanecer en el panel."
+            );
+
+            console.log("========================================");
+
+            return;
+
+        }
+
+
+        /* =============================================
+           SI NO ESTÁ EN LAS ÁREAS,
+           BUSCAR EN PERFILES
+        ============================================= */
+
+        console.log(
+            "Buscando usuario en tabla perfiles..."
+        );
+
+        const {
+            data: perfil,
+            error: errorPerfil
+        } = await supabaseClient
+            .from("perfiles")
+            .select("*")
+            .eq("id", usuario.id)
+            .maybeSingle();
+
+
+        if (errorPerfil) {
+
+            console.error(
+                "Error consultando perfiles:",
+                errorPerfil
+            );
+
+        }
+
+
+        /* =============================================
+           PERFIL ENCONTRADO
+        ============================================= */
+
+        if (!errorPerfil && perfil) {
+
+            console.log(
+                "PERFIL ENCONTRADO:",
+                perfil
+            );
+
+            const nombreCompleto =
+                obtenerNombreCompleto(perfil);
+
+            const correo =
+                perfil.correo ||
+                perfil.email ||
+                correoUsuario;
+
+            const rol =
+                normalizarRol(perfil.rol);
+
+
+            mostrarNombre(
+                nombreCompleto ||
+                usuarioGuardado.nombreCompleto ||
+                "Usuario"
+            );
+
+            mostrarCorreo(correo);
+
+
+            const usuarioPerfil = {
+
+                id: usuario.id,
+
+                usuario_id: usuario.id,
+
+                nombre:
+                    perfil.nombre ||
+                    perfil.nombres ||
+                    "",
+
+                apellido:
+                    perfil.apellido ||
+                    perfil.apellidos ||
+                    "",
+
+                nombreCompleto:
+                    nombreCompleto ||
+                    "Usuario",
+
+                correo: correo,
+
+                telefono:
+                    perfil.telefono || "",
+
+                area: rol,
+
+                rol: rol,
+
+                tabla: "perfiles"
+
+            };
+
+
+            sessionStorage.setItem(
+                "usuarioIntranet",
+                JSON.stringify(usuarioPerfil)
+            );
+
+
+            console.log(
+                "ROL DETECTADO:",
+                rol
+            );
+
+
+            /* =========================================
+               SOPORTE
+            ========================================= */
+
+            if (rol === "soporte" || rol === "it") {
+
+                redirigirSiEsNecesario(
+                    "soporte.html"
+                );
+
+                return;
+
+            }
+
+
+            /* =========================================
+               CLIENTE
+            ========================================= */
+
+            if (rol === "cliente") {
+
+                redirigirSiEsNecesario(
+                    "cliente/cliente.html"
+                );
+
+                return;
+
+            }
+
+
+            console.log(
+                "Perfil reconocido. No requiere redirección."
+            );
+
+            console.log("========================================");
+
+            return;
+
+        }
+
+
+        /* =============================================
+           NO SE ENCONTRÓ REGISTRO
+        ============================================= */
+
+        console.warn(
+            "El usuario no tiene registro en las tablas consultadas."
+        );
+
+
+        mostrarNombre(
+            usuarioGuardado.nombreCompleto ||
+            "Usuario"
+        );
+
+        mostrarCorreo(correoUsuario);
+
+
+        console.log(
+            "No se encontró un área activa para este usuario."
+        );
+
+        console.log("========================================");
+
+
+    } catch (error) {
+
+        console.error(
+            "ERROR CARGANDO USUARIO:",
+            error
+        );
+
+        mostrarNombre("Usuario");
+
+    }
+
+}
+
+
+/* =========================================================
+   BUSCAR USUARIO EN TODAS LAS ÁREAS
+========================================================= */
+
+async function buscarUsuarioEnTodasLasAreas(usuarioId) {
+
+    for (
+        const area of CONFIGURACION_AREAS_MENU
+    ) {
+
+        console.log(
+            `Buscando usuario en tabla: ${area.tabla}`
+        );
+
+        try {
+
+            const {
+                data,
+                error
+            } = await supabaseClient
+                .from(area.tabla)
+                .select("*")
+                .eq(area.columna, usuarioId)
+                .eq("activo", true)
+                .maybeSingle();
+
+
+            if (error) {
+
+                console.error(
+                    `Error consultando ${area.tabla}:`,
+                    error
+                );
+
+                continue;
+
+            }
+
+
+            if (data) {
+
+                console.log(
+                    `USUARIO ENCONTRADO EN: ${area.tabla}`,
+                    data
+                );
+
+                return {
+
+                    datos: data,
+
+                    tabla: area.tabla,
+
+                    almacenamiento:
+                        area.almacenamiento,
+
+                    nombre:
+                        area.nombre
+
+                };
+
+            }
+
+        } catch (error) {
+
+            console.error(
+                `Error buscando en ${area.tabla}:`,
+                error
+            );
+
+        }
+
+    }
+
+    return null;
+
+}
+
+
+/* =========================================================
+   OBTENER NOMBRE COMPLETO
+========================================================= */
+
+function obtenerNombreCompleto(datos) {
+
+    if (!datos) {
+        return "";
+    }
+
+    const nombre = String(
+        datos.nombre ||
+        datos.nombres ||
+        ""
+    ).trim();
+
+    const apellido = String(
+        datos.apellido ||
+        datos.apellidos ||
+        ""
+    ).trim();
+
+    return `${nombre} ${apellido}`.trim();
+
+}
+
+
+/* =========================================================
+   NORMALIZAR ROL
+========================================================= */
+
+function normalizarRol(rol) {
+
+    return String(rol || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[_-]/g, " ");
+
+}
+
+
+/* =========================================================
+   MOSTRAR NOMBRE
+========================================================= */
+
+function mostrarNombre(nombre) {
+
+    const elemento =
+        document.getElementById("nombreUsuario");
+
+    if (!elemento) {
+
+        console.warn(
+            "No existe el elemento #nombreUsuario en el HTML."
+        );
+
+        return;
+
+    }
+
+    elemento.textContent =
+        nombre || "Usuario";
+
+}
+
+
+/* =========================================================
+   MOSTRAR CORREO
+========================================================= */
+
+function mostrarCorreo(correo) {
+
+    const elemento =
+        document.getElementById("correoUsuario");
+
+    if (!elemento) {
+
+        console.warn(
+            "No existe el elemento #correoUsuario en el HTML."
+        );
+
+        return;
+
+    }
+
+    elemento.textContent =
+        correo || "";
+
+}
+
+
+/* =========================================================
+   REDIRECCIONAR SIN CREAR BUCLES
+========================================================= */
+
+function redirigirSiEsNecesario(destino) {
+
+    const paginaActual =
+        window.location.pathname
+            .split("/")
+            .pop()
+            .toLowerCase();
+
+    const paginaDestino =
+        destino
+            .split("/")
+            .pop()
+            .toLowerCase();
+
+    if (paginaActual !== paginaDestino) {
+
+        console.log(
+            "Redirigiendo a:",
+            destino
+        );
+
+        window.location.href = destino;
+
+    }
+
+}
+
+
+/* =========================================================
+   CERRAR SESIÓN
+========================================================= */
+
+function configurarCerrarSesion() {
+
+    const boton =
+        document.getElementById("btnCerrarSesion");
+
+    if (!boton) {
+        return;
+    }
+
+    boton.addEventListener(
+        "click",
+        async () => {
+
+            const confirmar = confirm(
+                "¿Deseas cerrar sesión?"
+            );
+
+            if (!confirmar) {
+                return;
+            }
+
+            try {
+
+                boton.disabled = true;
+
+                boton.innerHTML =
+                    '<i class="ri-loader-4-line ri-spin"></i>';
+
+
+                const {
+                    error
+                } = await supabaseClient.auth.signOut();
+
+                if (error) {
+                    throw error;
+                }
+
+
+                /* LIMPIAR DATOS DE LA INTRANET */
+
+                const claves = [
+
+                    "analista",
+                    "back_office",
+                    "bodega",
+                    "contabilidad",
+                    "jefe",
+                    "meg",
+                    "marketing",
+                    "recursos",
+                    "it",
+                    "it2",
+                    "areaUsuario",
+                    "usuarioIntranet"
+
+                ];
+
+                claves.forEach(clave => {
+
+                    sessionStorage.removeItem(clave);
+
+                });
+
+
+                console.log(
+                    "Sesión cerrada correctamente."
+                );
+
+                window.location.href = "index.html";
+
+
+            } catch (error) {
+
+                console.error(
+                    "Error cerrando sesión:",
+                    error
+                );
+
+                alert(
+                    "No se pudo cerrar la sesión."
+                );
+
+                boton.disabled = false;
+
+                boton.innerHTML =
+                    '<i class="ri-logout-box-r-line"></i>';
+
+            }
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   INICIAR SISTEMA
+========================================================= */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+
+        cargarUsuario();
+
+        configurarCerrarSesion();
+
+    }
+);

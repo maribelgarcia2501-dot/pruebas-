@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Mensajería Express - En revisión</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="soporte.css">
+    <link rel="stylesheet" href="revision.css">
+    ```
+
+</head>
+
+<body>
+
+
+    <header class="header">
+
+        <div class="logo">
+
+            <div class="logo-icono">
+                <i class="ri-loader-4-line"></i>
+            </div>
+
+            <div>
+                <h1>Tickets en revisión</h1>
+                <span>Webcorp Business - Soporte</span>
+            </div>
+
+        </div>
+
+        <div class="header-derecha">
+
+            <button type="button" class="btn-sonido" id="btnSonido">
+                <i class="ri-volume-up-line"></i>
+                Activar sonido
+            </button>
+
+            <div class="usuario-soporte">
+
+                <div class="usuario-soporte-icono">
+                    <i class="ri-user-settings-line"></i>
+                </div>
+
+                <div>
+
+                    <strong id="nombreUsuario">Usuario</strong>
+
+                    <span>Soporte</span>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </header>
+
+
+    <main class="contenedor">
+
+        <section class="bienvenida">
+
+            <div>
+
+                <span class="etiqueta">
+                    <i class="ri-loader-4-line"></i>
+                    En revisión
+                </span>
+
+                <h2>Tickets en revisión</h2>
+
+                <p>
+                    Aquí aparecen los tickets que están siendo atendidos.
+                </p>
+
+            </div>
+
+        </section>
+
+
+        <section class="barra">
+
+            <div class="busqueda">
+
+                <i class="ri-search-line"></i>
+
+                <input type="text" id="buscarTicket" placeholder="Buscar por nombre, asunto, ID o teléfono...">
+
+            </div>
+
+            <button type="button" class="btn-actualizar" id="btnActualizar">
+                <i class="ri-refresh-line"></i>
+                Actualizar
+            </button>
+
+            <button type="button" class="btn-actualizar" onclick="window.location.href='soporte.html'">
+                <i class="ri-arrow-left-line"></i>
+                Volver
+            </button>
+
+        </section>
+
+
+        <section class="tickets">
+
+            <div class="tickets-cabecera">
+
+                <div>
+
+                    <h3>Tickets en revisión</h3>
+
+                    <span id="textoCantidad">
+                        0 tickets
+                    </span>
+
+                </div>
+
+                <div id="indicadorConexion" class="conexion conectado">
+                    <i class="ri-checkbox-circle-fill"></i>
+                    Conectado
+                </div>
+
+            </div>
+
+
+            <div id="listaTickets" class="lista-tickets"></div>
+
+
+            <div id="sinTickets" class="sin-tickets">
+
+                <div>
+                    <i class="ri-inbox-line"></i>
+                </div>
+
+                <h3>No hay tickets en revisión</h3>
+
+                <p>
+                    Los tickets que estén siendo atendidos aparecerán aquí.
+                </p>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- =====================================================
+     MODAL DEL TICKET
+====================================================== -->
+
+    <div id="modalTicket" class="modal">
+
+        <div class="modal-contenido">
+
+
+            <!-- =================================================
+             CABECERA DEL MODAL
+        ================================================== -->
+
+            <div class="modal-cabecera">
+
+                <div>
+
+                    <span id="modalNumero">
+                        Ticket #0
+                    </span>
+
+                    <h2 id="modalAsunto">
+                        Asunto
+                    </h2>
+
+                </div>
+
+                <button type="button" id="cerrarModal" class="cerrar-modal">
+                    <i class="ri-close-line"></i>
+                </button>
+
+            </div>
+
+
+            <!-- =================================================
+             INFORMACIÓN DEL USUARIO DEL TICKET
+        ================================================== -->
+
+            <div class="modal-usuario">
+
+                <div class="avatar">
+                    <i class="ri-user-line"></i>
+                </div>
+
+                <div>
+
+                    <strong id="modalNombre">
+                        Usuario
+                    </strong>
+
+                    <span id="modalCorreo">
+                        correo
+                    </span>
+
+                    <span id="modalTelefono">
+                        teléfono
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+             DATOS DEL TICKET
+        ================================================== -->
+
+            <div class="datos-ticket">
+
+                <div>
+
+                    <span>Problema</span>
+
+                    <strong id="modalCategoria">
+                        -
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>Prioridad</span>
+
+                    <strong id="modalPrioridad">
+                        -
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>Estado</span>
+
+                    <strong id="modalEstado">
+                        -
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>Fecha</span>
+
+                    <strong id="modalFecha">
+                        -
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+             DESCRIPCIÓN
+        ================================================== -->
+
+            <div class="descripcion-ticket">
+
+                <label>
+                    Descripción
+                </label>
+
+                <p id="modalDescripcion">
+                    -
+                </p>
+
+            </div>
+
+
+            <!-- =================================================
+             IMAGEN / ARCHIVO ADJUNTO
+             
+             LA IMAGEN SE MOSTRARÁ DIRECTAMENTE AQUÍ
+        ================================================== -->
+
+            <div id="modalArchivoContenedor" class="archivo-ticket">
+
+                <img id="modalArchivoImagen" src="" alt="Imagen adjunta del ticket">
+
+                <a id="modalArchivo" href="#" target="_blank" rel="noopener noreferrer">
+                    <i class="ri-attachment-2"></i>
+                    Ver archivo adjunto
+                </a>
+
+            </div>
+
+
+            <!-- =================================================
+             ESTADO DEL TICKET
+        ================================================== -->
+
+            <div class="estado-ticket">
+
+                <label for="estadoTicket">
+                    Estado del ticket
+                </label>
+
+                <select id="estadoTicket">
+
+                    <option value="Pendiente">
+                        Pendiente
+                    </option>
+
+                    <option value="En revisión">
+                        En revisión
+                    </option>
+
+                    <option value="Resuelto">
+                        Resuelto
+                    </option>
+
+                    <option value="Cerrado">
+                        Cerrado
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <!-- =================================================
+             RESPUESTA
+        ================================================== -->
+
+            <div class="respuesta-ticket">
+
+                <label for="respuestaTicket">
+                    Respuesta para el usuario
+                </label>
+
+                <textarea id="respuestaTicket" rows="5"
+                    placeholder="Escribe aquí la respuesta o solución..."></textarea>
+
+            </div>
+
+
+            <!-- =================================================
+             ACCIONES
+        ================================================== -->
+
+            <div class="modal-acciones">
+
+                <button type="button" id="btnCerrarTicket" class="btn-secundario">
+                    Cerrar
+                </button>
+
+                <button type="button" id="btnGuardarTicket" class="btn-principal">
+                    <i class="ri-save-line"></i>
+                    Guardar cambios
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+     SUPABASE
+====================================================== -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+
+    <!-- ===================================================== 
+     JAVASCRIPT DE REVISION 
+====================================================== -->
+
+    <script src="revision.js"></script>
+
+</body>
+
+</html>
