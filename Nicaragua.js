@@ -3,29 +3,18 @@
 /* =========================================================
    MENSAJERÍA EXPRESS
    ÁREA DE COBERTURAS - NICARAGUA
-   (15 departamentos + 2 regiones autónomas + municipios)
+   (15 departamentos + 2 regiones autónomas = 17, + municipios)
 
    FUNCIONES:
    - Departamentos / Municipios
    - Pintar manual, Círculo, Rectángulo, Polígono
    - Borrador circular por partes
    - Editar / Eliminar
-   - Guardar / cargar
+   - Guardar / cargar (local + Supabase compartido)
    - Deshacer / rehacer
-   - Buscador (datos locales + Nominatim + Photon) y lista de departamentos
+   - Buscador (datos locales + Nominatim + Photon) y lista
 
-   MAPA: #mapaNicaragua (si no existe, usa #mapaHonduras,
-   #mapaElSalvador, #mapaGuatemala, #mapaPanama, #mapaCostaRica
-   o #mapaUruguay)
-
-   NOTA: los IDs del HTML se mantienen iguales
-   (buscarDepartamento, listaDepartamentos, totalDepartamentos,
-   btnPintarMunicipios, etc.) para que no tengas que cambiar tu HTML.
-
-   NOTA GEOGRÁFICA: Nicaragua tiene 15 departamentos y 2 regiones
-   autónomas del Caribe (Costa Caribe Norte y Costa Caribe Sur).
-   La fuente de datos trae las 17 divisiones; las 2 regiones se
-   incluyen para que la costa caribeña pueda pintarse.
+   MAPA: #mapaNicaragua
 ========================================================= */
 
 
@@ -51,13 +40,8 @@ const CONFIG = {
 
     zoomMaximoBusqueda: 17,
 
-    /* Nominatim limita a 40 resultados por consulta */
     limiteBusqueda: 40,
-
-    /* Resultados máximos que se piden a Photon */
     limiteBusquedaPhoton: 20,
-
-    /* Resultados máximos que se toman de departamentos/municipios locales */
     limiteBusquedaLocal: 15,
 
     maxHistorial: 50,
@@ -66,11 +50,10 @@ const CONFIG = {
     pasosBuffer: 8,
     anchoPintadoMetros: 1500,
 
-    /* 15 departamentos + 2 regiones autónomas en la fuente de datos */
-    totalDivisionesEsperado: 17,
+    totalDepartamentosEsperado: 17,
 
-    /* [oeste, sur, este, norte] (incluye Corn Islands y cayos) */
-    bbox: [-87.80, 10.65, -82.50, 15.10],
+    /* [oeste, sur, este, norte] */
+    bbox: [-87.75, 10.70, -82.55, 15.05],
 
     urls: {
 
@@ -105,11 +88,284 @@ const STORAGE_MUNICIPIOS =
 
 
 /* =========================================================
+   SINCRONIZACIÓN COMPARTIDA CON SUPABASE - NICARAGUA
+   Tabla: public.coberturas_nicaragua
+   Columnas: id (text, PK), geojson (jsonb),
+   updated_at (timestamptz), updated_by (uuid, nullable)
+========================================================= */
+
+const SUPABASE_URL_COBERTURAS = "https://kayzwwgmebtsaiovkeos.supabase.co";
+const SUPABASE_KEY_COBERTURAS = "sb_publishable_yj-QjGhy6RQNUzoxg3HQeg_hkZHuSyL";
+const TABLA_COBERTURAS_SUPABASE = "coberturas_nicaragua";
+const ID_COBERTURAS_SUPABASE = "nicaragua";
+const URL_LIBRERIA_SUPABASE =
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
+
+let clienteSupabaseCoberturas = null;
+let canalRealtimeCoberturas = null;
+let sincronizacionSupabaseActiva = false;
+let aplicandoCoberturaRemota = false;
+let colaGuardadoCoberturas = Promise.resolve();
+let ultimoSnapshotSupabase = "";
+let cargaInicialSupabaseTerminada = false;
+
+function asegurarLibreriaSupabase() {
+    if (
+        (typeof supabaseClient !== "undefined" && supabaseClient?.from) ||
+        window.supabaseClient?.from ||
+        window.supabase?.createClient ||
+        window.Supabase?.createClient
+    ) {
+        return Promise.resolve(true);
+    }
+
+    return new Promise(resolve => {
+        const existente = document.querySelector('script[data-supabase-coberturas="1"]');
+        if (existente) {
+            existente.addEventListener("load", () => resolve(true), { once: true });
+            existente.addEventListener("error", () => resolve(false), { once: true });
+            return;
+        }
+
+        const script = document.createElement("script");
+        script.src = URL_LIBRERIA_SUPABASE;
+        script.dataset.supabaseCoberturas = "1";
+        script.onload = () => {
+            console.log("[COBERTURAS NI] supabase-js cargado.");
+            resolve(true);
+        };
+        script.onerror = () => {
+            console.error("[COBERTURAS NI] No se pudo cargar supabase-js.");
+            resolve(false);
+        };
+        document.head.appendChild(script);
+    });
+}
+
+function obtenerClienteSupabaseCoberturas() {
+    if (clienteSupabaseCoberturas) return clienteSupabaseCoberturas;
+
+    try {
+        if (typeof supabaseClient !== "undefined" && supabaseClient?.from) {
+            clienteSupabaseCoberturas = supabaseClient;
+            return clienteSupabaseCoberturas;
+        }
+    } catch (_) {}
+
+    if (window.supabaseClient?.from) {
+        clienteSupabaseCoberturas = window.supabaseClient;
+        return clienteSupabaseCoberturas;
+    }
+
+    const libreria = window.supabase || window.Supabase;
+    if (libreria?.createClient) {
+        clienteSupabaseCoberturas = libreria.createClient(
+            SUPABASE_URL_COBERTURAS,
+            SUPABASE_KEY_COBERTURAS,
+            {
+                auth: {
+                    storageKey: "mensajeria-intranet-auth",
+                    persistSession: true,
+                    autoRefreshToken: true,
+                    detectSessionInUrl: false
+                }
+            }
+        );
+        return clienteSupabaseCoberturas;
+    }
+
+    return null;
+}
+
+function guardarCacheLocalCoberturas(features) {
+    const fecha = new Date().toISOString();
+    localStorage.setItem(STORAGE_ZONAS, JSON.stringify({
+        version: 1,
+        fecha,
+        zonas: Array.isArray(features) ? features : []
+    }));
+    localStorage.setItem(STORAGE_MUNICIPIOS, JSON.stringify({
+        version: 1,
+        fecha,
+        zonas: []
+    }));
+}
+
+async function escribirCoberturasSupabase(features) {
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente) throw new Error("No se encontró el cliente de Supabase.");
+
+    const { data: sesionData, error: errorSesion } = await cliente.auth.getSession();
+    if (errorSesion) throw errorSesion;
+    const sesion = sesionData?.session;
+
+    if (!sesion?.user?.id) {
+        throw new Error("No hay una sesión iniciada en Supabase.");
+    }
+
+    const geojson = {
+        type: "FeatureCollection",
+        features: Array.isArray(features) ? features : []
+    };
+
+    const { error } = await cliente
+        .from(TABLA_COBERTURAS_SUPABASE)
+        .upsert({
+            id: ID_COBERTURAS_SUPABASE,
+            geojson,
+            updated_at: new Date().toISOString(),
+            updated_by: sesion.user.id
+        }, { onConflict: "id" });
+
+    if (error) throw error;
+
+    ultimoSnapshotSupabase = JSON.stringify(geojson);
+    console.log("[COBERTURAS NI] Sincronizadas con Supabase:", geojson.features.length, "zonas");
+    return true;
+}
+
+function encolarGuardadoCoberturasSupabase(features) {
+    if (!sincronizacionSupabaseActiva || aplicandoCoberturaRemota) return;
+
+    const copia = JSON.parse(JSON.stringify(features || []));
+    colaGuardadoCoberturas = colaGuardadoCoberturas
+        .then(() => escribirCoberturasSupabase(copia))
+        .catch(error => {
+            console.error("[COBERTURAS NI] Error sincronizando:", error);
+            notificar(
+                "Error de sincronización",
+                error?.message || "No se pudieron guardar las coberturas en la nube.",
+                "error"
+            );
+        });
+
+    return colaGuardadoCoberturas;
+}
+
+async function cargarCoberturasSupabase() {
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente) {
+        console.warn("[COBERTURAS NI] Cliente Supabase no disponible; se conserva la copia local.");
+        return false;
+    }
+
+    const { data, error } = await cliente
+        .from(TABLA_COBERTURAS_SUPABASE)
+        .select("id, geojson, updated_at, updated_by")
+        .eq("id", ID_COBERTURAS_SUPABASE)
+        .maybeSingle();
+
+    if (error) throw error;
+
+    if (data?.geojson) {
+        const geojson = data.geojson;
+        const features = Array.isArray(geojson)
+            ? geojson
+            : (Array.isArray(geojson.features) ? geojson.features : []);
+
+        aplicandoCoberturaRemota = true;
+        cargandoEstado = true;
+        try {
+            reemplazarCoberturas(features);
+            guardarCacheLocalCoberturas(features);
+            ultimoSnapshotSupabase = JSON.stringify({
+                type: "FeatureCollection",
+                features
+            });
+        } finally {
+            cargandoEstado = false;
+            aplicandoCoberturaRemota = false;
+        }
+
+        console.log("[COBERTURAS NI] Coberturas compartidas cargadas:", features.length);
+        return true;
+    }
+
+    // Si aún no existe el registro, migrar las coberturas de este equipo.
+    const locales = obtenerCoberturas();
+    if (locales.length && PUEDE_EDITAR_MAPA) {
+        await escribirCoberturasSupabase(locales);
+        console.log("[COBERTURAS NI] Coberturas locales migradas a Supabase.");
+    } else {
+        console.log("[COBERTURAS NI] No existe registro remoto todavía.");
+    }
+    return true;
+}
+
+function iniciarRealtimeCoberturas() {
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente?.channel || canalRealtimeCoberturas) return;
+
+    canalRealtimeCoberturas = cliente
+        .channel("coberturas-nicaragua-compartidas")
+        .on("postgres_changes", {
+            event: "*",
+            schema: "public",
+            table: TABLA_COBERTURAS_SUPABASE,
+            filter: "id=eq." + ID_COBERTURAS_SUPABASE
+        }, payload => {
+            if (!payload?.new?.geojson) return;
+
+            const geojson = payload.new.geojson;
+            const features = Array.isArray(geojson)
+                ? geojson
+                : (Array.isArray(geojson.features) ? geojson.features : []);
+            const snapshot = JSON.stringify({ type: "FeatureCollection", features });
+
+            if (snapshot === ultimoSnapshotSupabase) return;
+
+            aplicandoCoberturaRemota = true;
+            cargandoEstado = true;
+            try {
+                reemplazarCoberturas(features);
+                guardarCacheLocalCoberturas(features);
+                ultimoSnapshotSupabase = snapshot;
+                guardarEstadoInicialHistorial();
+                actualizarEstadoMapa();
+                console.log("[COBERTURAS NI] Cambio remoto recibido:", features.length, "zonas");
+            } finally {
+                cargandoEstado = false;
+                aplicandoCoberturaRemota = false;
+            }
+        })
+        .subscribe(estado => {
+            console.log("[COBERTURAS NI] Realtime:", estado);
+        });
+}
+
+async function iniciarSincronizacionCoberturasSupabase() {
+    const disponible = await asegurarLibreriaSupabase();
+    if (!disponible) {
+        console.warn("[COBERTURAS NI] Supabase no disponible; funcionamiento local.");
+        return false;
+    }
+
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente) return false;
+
+    try {
+        await cargarCoberturasSupabase();
+        sincronizacionSupabaseActiva = true;
+        cargaInicialSupabaseTerminada = true;
+        iniciarRealtimeCoberturas();
+        console.log("[COBERTURAS NI] Sincronización compartida activa.");
+        return true;
+    } catch (error) {
+        console.error("[COBERTURAS NI] No se pudo iniciar la sincronización:", error);
+        notificar(
+            "Error de conexión con Supabase",
+            error?.message || "No se pudieron cargar las coberturas compartidas.",
+            "error"
+        );
+        return false;
+    }
+}
+
+
+/* =========================================================
    SISTEMA DE PERMISOS DE EDICIÓN
    Login Central: Supabase storageKey "mensajeria-intranet-auth"
    También utiliza sessionStorage "usuarioIntranet".
-   Solo los correos indicados pueden modificar.
-   (Agrega o cambia aquí los correos autorizados para Nicaragua.)
 ========================================================= */
 
 const USUARIOS_AUTORIZADOS = [
@@ -149,7 +405,6 @@ function correoDesdeObjetoSesion(objeto) {
 }
 
 function leerCorreoGuardado() {
-    // Formato de usuario que guarda el Login Central.
     try {
         const usuarioIntranet = sessionStorage.getItem("usuarioIntranet");
         if (usuarioIntranet) {
@@ -160,7 +415,6 @@ function leerCorreoGuardado() {
         console.warn("No se pudo leer usuarioIntranet:", error);
     }
 
-    // Sesión persistida por Supabase con storageKey personalizado.
     try {
         const sesion = localStorage.getItem("mensajeria-intranet-auth");
         if (sesion) {
@@ -186,7 +440,7 @@ function actualizarPermisoPorCorreo(correo) {
     actualizarInterfazPermisos();
 
     console.log(
-        "[COBERTURAS] Usuario:",
+        "[COBERTURAS NI] Usuario:",
         CORREO_USUARIO_ACTUAL || "(sin sesión detectada)",
         "| Permiso:",
         PUEDE_EDITAR_MAPA ? "EDICIÓN" : "SOLO CONSULTA"
@@ -197,12 +451,9 @@ async function inicializarPermisosMapa() {
     let correo = "";
     let clienteDetectado = false;
 
-    // Preferir siempre la sesión viva del cliente Supabase del Login Central.
     try {
         let cliente = null;
 
-        // El Login Central declara const supabaseClient en el ámbito global
-        // de los scripts clásicos, aunque no lo publique en window.
         if (typeof supabaseClient !== "undefined") {
             cliente = supabaseClient;
         } else if (window.supabaseClient) {
@@ -234,9 +485,6 @@ async function inicializarPermisosMapa() {
         console.error("Error consultando autenticación Supabase:", error);
     }
 
-    // Si el cliente Supabase está disponible, una sesión nula significa
-    // que no hay usuario autenticado: no aceptar datos de sesión antiguos.
-    // Si el cliente no está expuesto por el Login Central, usar su usuarioIntranet.
     if (!clienteDetectado && !correo) correo = leerCorreoGuardado();
 
     actualizarPermisoPorCorreo(correo);
@@ -246,7 +494,6 @@ async function inicializarPermisosMapa() {
 }
 
 function exigirPermisoEdicion() {
-    // No confiar en el correo escrito en un campo ni en el área del usuario.
     if (!PERMISOS_INICIALIZADOS || !PUEDE_EDITAR_MAPA) {
         notificar(
             "Acceso de solo consulta",
@@ -289,8 +536,6 @@ function actualizarInterfazPermisos() {
             : "Disponible solo para los usuarios autorizados";
     });
 
-    // Los controles de nivel se mantienen habilitados para CONSULTAR
-    // departamentos y municipios; no conceden permiso de edición.
     [
         "btnPintarMunicipios",
         "btnPintarProvincias",
@@ -341,10 +586,10 @@ function bloquearGeomanParaConsulta() {
 
 
 /* =========================================================
-   LOS 15 DEPARTAMENTOS DE NICARAGUA + 2 REGIONES AUTÓNOMAS
+   DEPARTAMENTOS Y REGIONES AUTÓNOMAS DE NICARAGUA (17)
 ========================================================= */
 
-const DEPARTAMENTOS_15 = [
+const DEPARTAMENTOS_OFICIALES = [
     "Boaco",
     "Carazo",
     "Chinandega",
@@ -359,10 +604,7 @@ const DEPARTAMENTOS_15 = [
     "Matagalpa",
     "Nueva Segovia",
     "Río San Juan",
-    "Rivas"
-];
-
-const REGIONES_AUTONOMAS = [
+    "Rivas",
     "Costa Caribe Norte",
     "Costa Caribe Sur"
 ];
@@ -370,12 +612,11 @@ const REGIONES_AUTONOMAS = [
 /* Nombre sin tildes -> nombre oficial con tildes */
 const NOMBRES_VISIBLES = {};
 
-DEPARTAMENTOS_15.concat(REGIONES_AUTONOMAS).forEach(nombre => {
+DEPARTAMENTOS_OFICIALES.forEach(nombre => {
     NOMBRES_VISIBLES[normalizarTextoClave(nombre)] = nombre;
 });
 
-/* Variantes de escritura que suelen venir en las fuentes de datos.
-   El prefijo "departamento de " se elimina automáticamente. */
+/* Variantes de escritura que suelen venir en las fuentes de datos */
 const ALIAS_NOMBRES = {
     "esteli": "Estelí",
     "leon": "León",
@@ -383,28 +624,23 @@ const ALIAS_NOMBRES = {
     "rio-san-juan": "Río San Juan",
     "nueva-segovia": "Nueva Segovia",
 
-    /* Regiones autónomas (nombres antiguos y variantes) */
     "atlantico norte": "Costa Caribe Norte",
-    "region autonoma atlantico norte": "Costa Caribe Norte",
     "region autonoma del atlantico norte": "Costa Caribe Norte",
     "region autonoma de la costa caribe norte": "Costa Caribe Norte",
-    "regiao autonoma atlantico norte": "Costa Caribe Norte",
-    "raan": "Costa Caribe Norte",
-    "raccn": "Costa Caribe Norte",
+    "region autonoma costa caribe norte": "Costa Caribe Norte",
     "north caribbean coast": "Costa Caribe Norte",
     "north caribbean coast autonomous region": "Costa Caribe Norte",
-    "costa caribe norte": "Costa Caribe Norte",
+    "raan": "Costa Caribe Norte",
+    "raccn": "Costa Caribe Norte",
 
     "atlantico sur": "Costa Caribe Sur",
-    "region autonoma atlantico sur": "Costa Caribe Sur",
     "region autonoma del atlantico sur": "Costa Caribe Sur",
     "region autonoma de la costa caribe sur": "Costa Caribe Sur",
-    "regiao autonoma atlantico sur": "Costa Caribe Sur",
-    "raas": "Costa Caribe Sur",
-    "raccs": "Costa Caribe Sur",
+    "region autonoma costa caribe sur": "Costa Caribe Sur",
     "south caribbean coast": "Costa Caribe Sur",
     "south caribbean coast autonomous region": "Costa Caribe Sur",
-    "costa caribe sur": "Costa Caribe Sur"
+    "raas": "Costa Caribe Sur",
+    "raccs": "Costa Caribe Sur"
 };
 
 Object.keys(ALIAS_NOMBRES).forEach(clave => {
@@ -465,14 +701,7 @@ function normalizarTextoClave(texto) {
 
 function nombreVisibleDepartamento(nombre) {
 
-    let clave = normalizarTextoClave(nombre);
-
-    if (NOMBRES_VISIBLES[clave]) {
-        return NOMBRES_VISIBLES[clave];
-    }
-
-    /* "Departamento de X" -> "X" */
-    clave = clave.replace(/^departamento de /, "");
+    const clave = normalizarTextoClave(nombre);
 
     return NOMBRES_VISIBLES[clave] || nombre;
 }
@@ -501,7 +730,6 @@ async function iniciarSistema() {
         verificarMapaHTML();
         crearMapa();
 
-        // Geoman debe quedar bloqueado desde el primer instante para consulta.
         if (!PUEDE_EDITAR_MAPA) {
             bloquearGeomanParaConsulta();
         }
@@ -512,6 +740,9 @@ async function iniciarSistema() {
         cargarEstadoGuardado();
 
         await cargarGeografia();
+
+        // Primero se recuperan las coberturas compartidas y después se activa Realtime.
+        await iniciarSincronizacionCoberturasSupabase();
 
         actualizarListaDepartamentos();
         actualizarInterfazHerramienta();
@@ -1073,10 +1304,7 @@ function crearCobertura(geometria, herramienta) {
             tipo: obtenerTipoFormulario(),
             estado: obtenerEstadoFormulario(),
             herramienta: herramienta,
-
-            /* Las figuras dibujadas NO son ni departamento ni municipio */
             nivel: "manual",
-
             fecha: new Date().toISOString()
         },
         geometry: geometria.geometry
@@ -1715,7 +1943,6 @@ function detenerTodasLasHerramientas() {
         }
     } catch (_) {}
 
-    /* Desactivar edición en las coberturas */
     try {
         if (grupoCoberturas) {
             grupoCoberturas.eachLayer(layer => {
@@ -2047,7 +2274,7 @@ function obtenerIdFeature(feature) {
 
 
 /* Departamento al que pertenece un municipio (para el tooltip,
-   porque hay nombres repetidos: San José, San Juan, etc.) */
+   porque hay nombres repetidos) */
 function departamentoDeMunicipio(feature) {
 
     if (
@@ -2094,20 +2321,19 @@ async function cargarGeografia() {
             f => obtenerNombreFeature(f)
         );
 
-        console.log("DEPARTAMENTOS/REGIONES CARGADOS:", nombres.length);
+        console.log("DEPARTAMENTOS CARGADOS:", nombres.length);
         console.log("Nombres:", nombres);
 
         const noReconocidos = nombres.filter(n => !esDepartamentoOficial(n));
 
         if (
-            nombres.length !== CONFIG.totalDivisionesEsperado ||
+            nombres.length !== CONFIG.totalDepartamentosEsperado ||
             noReconocidos.length
         ) {
             console.warn(
-                `Se esperaban ${CONFIG.totalDivisionesEsperado} divisiones ` +
-                `(15 departamentos + 2 regiones autónomas). ` +
-                `Cargadas: ${nombres.length}. ` +
-                `Nombres no reconocidos:`,
+                `Se esperaban ${CONFIG.totalDepartamentosEsperado} departamentos. ` +
+                `Cargados: ${nombres.length}. ` +
+                `Nombres no reconocidos (agrégalos a ALIAS_NOMBRES):`,
                 noReconocidos
             );
         }
@@ -2306,8 +2532,6 @@ function estiloMunicipio() {
 
 /* =========================================================
    INTERACCIÓN DE CAPAS
-   Solo la capa del nivel activo está en el mapa, para que los
-   clics no los capture la capa equivocada.
 ========================================================= */
 
 function actualizarInteraccionCapas() {
@@ -2340,7 +2564,6 @@ function actualizarInteraccionCapas() {
         }
     }
 
-    /* Las coberturas siempre quedan por encima de las capas base */
     if (grupoCoberturas && mapa.hasLayer(grupoCoberturas)) {
         try {
             grupoCoberturas.bringToFront();
@@ -2376,7 +2599,7 @@ function configurarBuscador() {
 
     input.setAttribute(
         "placeholder",
-        "Busca calles, barrios, zonas, municipios, departamentos..."
+        "Busca calles, colonias, zonas, municipios, departamentos..."
     );
 
     input.addEventListener("input", function () {
@@ -2442,9 +2665,7 @@ function buscarDireccionConDebounce(texto) {
 }
 
 
-/* ---------------------------------------------------------
-   Fuente 1: departamentos y municipios ya cargados (instantáneo)
---------------------------------------------------------- */
+/* Fuente 1: departamentos y municipios ya cargados (instantáneo) */
 function buscarEnDatosLocales(texto) {
 
     const clave = normalizarTextoClave(texto);
@@ -2511,9 +2732,7 @@ function buscarEnDatosLocales(texto) {
 }
 
 
-/* ---------------------------------------------------------
-   Fuente 2: Nominatim (OpenStreetMap)
---------------------------------------------------------- */
+/* Fuente 2: Nominatim (OpenStreetMap) */
 async function buscarNominatim(texto, signal) {
 
     const b = CONFIG.bbox;
@@ -2550,10 +2769,7 @@ async function buscarNominatim(texto, signal) {
 }
 
 
-/* ---------------------------------------------------------
-   Fuente 3: Photon (OpenStreetMap, tolera errores de escritura
-   y nombres parciales)
---------------------------------------------------------- */
+/* Fuente 3: Photon (OpenStreetMap, tolera errores de escritura) */
 async function buscarPhoton(texto, signal) {
 
     const b = CONFIG.bbox;
@@ -2622,9 +2838,7 @@ async function buscarPhoton(texto, signal) {
 }
 
 
-/* ---------------------------------------------------------
-   Unir resultados sin repetir lugares
---------------------------------------------------------- */
+/* Unir resultados sin repetir lugares */
 function combinarResultados() {
 
     const listas = Array.prototype.slice.call(arguments);
@@ -2688,7 +2902,6 @@ async function buscarDireccion(texto) {
 
     try {
 
-        /* Lo local aparece de inmediato mientras responden los servicios */
         const locales = buscarEnDatosLocales(texto);
 
         if (locales.length) {
@@ -2800,15 +3013,15 @@ function obtenerTipoUbicacion(resultado) {
         address.quarter ||
         ["neighbourhood", "suburb", "quarter"].includes(tipo)
     ) {
-        return "Barrio o zona";
+        return "Colonia o zona";
     }
 
     if (address.hamlet || tipo === "hamlet") {
-        return "Caserío o comarca";
+        return "Caserío o aldea";
     }
 
     if (address.village || tipo === "village") {
-        return "Comarca o pueblo";
+        return "Aldea o pueblo";
     }
 
     if (address.town || tipo === "town") {
@@ -3013,21 +3226,21 @@ function seleccionarResultadoBusqueda(resultado) {
     let zoom = 16;
 
     if (tipo.includes("Departamento")) {
-        zoom = 9;
+        zoom = 10;
     } else if (
         tipo.includes("Municipio") ||
         tipo.includes("municipio") ||
         tipo.includes("Ciudad")
     ) {
-        zoom = 12;
+        zoom = 13;
     } else if (
-        tipo.includes("Comarca") ||
+        tipo.includes("Aldea") ||
         tipo.includes("Caserío")
     ) {
         zoom = 15;
     } else if (
         tipo.includes("Calle") ||
-        tipo.includes("Barrio")
+        tipo.includes("Colonia")
     ) {
         zoom = 17;
     }
@@ -3075,7 +3288,6 @@ function limpiarMarcadoresBusqueda() {
 
 /* =========================================================
    LISTA DE DEPARTAMENTOS (usa #listaDepartamentos)
-   Incluye las 2 regiones autónomas para poder pintarlas.
 ========================================================= */
 
 function actualizarListaDepartamentos() {
@@ -3122,11 +3334,10 @@ function actualizarListaDepartamentos() {
         lista.appendChild(elemento);
     });
 
-    /* --- Total: 15 departamentos --- */
     const totalElemento = document.getElementById("totalDepartamentos");
 
     if (totalElemento) {
-        totalElemento.textContent = String(DEPARTAMENTOS_15.length);
+        totalElemento.textContent = String(DEPARTAMENTOS_OFICIALES.length);
     }
 }
 
@@ -3261,39 +3472,18 @@ function configurarTeclado() {
 
 
 /* =========================================================
-   STORAGE
+   STORAGE (local + Supabase)
 ========================================================= */
 
 function guardarEstado() {
 
     if (!exigirPermisoEdicion()) return;
-
-    if (cargandoEstado) {
-        return;
-    }
+    if (cargandoEstado || aplicandoCoberturaRemota) return;
 
     try {
-
-        const fecha = new Date().toISOString();
-
-        localStorage.setItem(
-            STORAGE_ZONAS,
-            JSON.stringify({
-                version: 1,
-                fecha: fecha,
-                zonas: obtenerCoberturas()
-            })
-        );
-
-        localStorage.setItem(
-            STORAGE_MUNICIPIOS,
-            JSON.stringify({
-                version: 1,
-                fecha: fecha,
-                zonas: []
-            })
-        );
-
+        const features = obtenerCoberturas();
+        guardarCacheLocalCoberturas(features);
+        encolarGuardadoCoberturasSupabase(features);
     } catch (error) {
         console.error("Error guardando:", error);
     }
@@ -3305,15 +3495,10 @@ function cargarEstadoGuardado() {
     cargandoEstado = true;
 
     try {
-
         const texto = localStorage.getItem(STORAGE_ZONAS);
-
-        if (!texto) {
-            return;
-        }
+        if (!texto) return;
 
         const datos = JSON.parse(texto);
-
         let zonas = [];
 
         if (Array.isArray(datos)) {
@@ -3325,25 +3510,28 @@ function cargarEstadoGuardado() {
         if (zonas.length) {
             reemplazarCoberturas(zonas);
         }
-
     } catch (error) {
-
         console.error("Error cargando estado:", error);
-
     } finally {
-
         cargandoEstado = false;
     }
 }
 
 
-function guardarEstadoManual() {
+async function guardarEstadoManual() {
 
     if (!exigirPermisoEdicion()) return;
 
     guardarEstado();
+    await colaGuardadoCoberturas;
 
-    notificar("Guardado", "Todas las coberturas fueron guardadas.", "success");
+    notificar(
+        "Guardado",
+        sincronizacionSupabaseActiva
+            ? "Las coberturas quedaron guardadas y sincronizadas."
+            : "Las coberturas quedaron guardadas en este equipo; Supabase no está conectado.",
+        sincronizacionSupabaseActiva ? "success" : "warning"
+    );
 }
 
 function cargarEstadoManual() {
@@ -3513,7 +3701,6 @@ function actualizarInterfazHerramienta() {
 
     const activos = (mapaBotones[herramientaActiva] || []).slice();
 
-    /* Los botones de nivel se marcan según el nivel activo */
     if (herramientaActiva === "ninguna") {
 
         if (nivelActivo === "municipios") {
