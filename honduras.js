@@ -63,8 +63,8 @@ const CONFIG = {
 
     totalDepartamentosEsperado: 18,
 
-    /* [oeste, sur, este, norte] (incluye Islas de la Bahía) */
-    bbox: [-89.40, 12.90, -82.90, 16.60],
+    /* [oeste, sur, este, norte] */
+    bbox: [-89.40, 12.95, -83.10, 16.55],
 
     urls: {
 
@@ -98,45 +98,81 @@ const STORAGE_MUNICIPIOS =
     "mensajeriaExpressMunicipiosCoberturaHonduras";
 
 
-    /* =========================================================
-   CONEXIÓN SUPABASE - HONDURAS
+/* =========================================================
+   SINCRONIZACIÓN COMPARTIDA CON SUPABASE - HONDURAS
+   Tabla: public.coberturas_honduras
+   Columnas: id (text, PK), geojson (jsonb),
+   updated_at (timestamptz), updated_by (uuid, nullable)
 ========================================================= */
 
-const SUPABASE_URL =
-    "https://kayzwwgmebtsaiovkeos.supabase.co";
+const SUPABASE_URL_COBERTURAS = "https://kayzwwgmebtsaiovkeos.supabase.co";
+const SUPABASE_KEY_COBERTURAS = "sb_publishable_yj-QjGhy6RQNUzoxg3HQeg_hkZHuSyL";
+const TABLA_COBERTURAS_SUPABASE = "coberturas_honduras";
+const ID_COBERTURAS_SUPABASE = "honduras";
+const URL_LIBRERIA_SUPABASE =
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
 
-const SUPABASE_KEY =
-    "sb_publishable_yj-QjGhy6RQNUzoxg3HQeg_hkZHuSyL";
-
-const TABLA_COBERTURAS = "coberturas_honduras";
-const ID_COBERTURA = "honduras";
-
-let clienteCoberturasHonduras = null;
-let canalCoberturasHonduras = null;
+let clienteSupabaseCoberturas = null;
+let canalRealtimeCoberturas = null;
 let sincronizacionSupabaseActiva = false;
 let aplicandoCoberturaRemota = false;
 let colaGuardadoCoberturas = Promise.resolve();
+let ultimoSnapshotSupabase = "";
+let cargaInicialSupabaseTerminada = false;
 
-function inicializarClienteCoberturas() {
-
-    if (clienteCoberturasHonduras) {
-        return clienteCoberturasHonduras;
-    }
-
-    if (!window.supabase?.createClient) {
-        throw new Error("No se cargó la librería de Supabase.");
-    }
-
-    // Reutilizar el cliente del Login Central si está disponible.
+function asegurarLibreriaSupabase() {
     if (
-        typeof supabaseClient !== "undefined" &&
-        supabaseClient
+        (typeof supabaseClient !== "undefined" && supabaseClient?.from) ||
+        window.supabaseClient?.from ||
+        window.supabase?.createClient ||
+        window.Supabase?.createClient
     ) {
-        clienteCoberturasHonduras = supabaseClient;
-    } else {
-        clienteCoberturasHonduras = window.supabase.createClient(
-            SUPABASE_URL,
-            SUPABASE_KEY,
+        return Promise.resolve(true);
+    }
+
+    return new Promise(resolve => {
+        const existente = document.querySelector('script[data-supabase-coberturas="1"]');
+        if (existente) {
+            existente.addEventListener("load", () => resolve(true), { once: true });
+            existente.addEventListener("error", () => resolve(false), { once: true });
+            return;
+        }
+
+        const script = document.createElement("script");
+        script.src = URL_LIBRERIA_SUPABASE;
+        script.dataset.supabaseCoberturas = "1";
+        script.onload = () => {
+            console.log("[COBERTURAS HN] supabase-js cargado.");
+            resolve(true);
+        };
+        script.onerror = () => {
+            console.error("[COBERTURAS HN] No se pudo cargar supabase-js.");
+            resolve(false);
+        };
+        document.head.appendChild(script);
+    });
+}
+
+function obtenerClienteSupabaseCoberturas() {
+    if (clienteSupabaseCoberturas) return clienteSupabaseCoberturas;
+
+    try {
+        if (typeof supabaseClient !== "undefined" && supabaseClient?.from) {
+            clienteSupabaseCoberturas = supabaseClient;
+            return clienteSupabaseCoberturas;
+        }
+    } catch (_) {}
+
+    if (window.supabaseClient?.from) {
+        clienteSupabaseCoberturas = window.supabaseClient;
+        return clienteSupabaseCoberturas;
+    }
+
+    const libreria = window.supabase || window.Supabase;
+    if (libreria?.createClient) {
+        clienteSupabaseCoberturas = libreria.createClient(
+            SUPABASE_URL_COBERTURAS,
+            SUPABASE_KEY_COBERTURAS,
             {
                 auth: {
                     storageKey: "mensajeria-intranet-auth",
@@ -146,69 +182,70 @@ function inicializarClienteCoberturas() {
                 }
             }
         );
+        return clienteSupabaseCoberturas;
     }
 
-    return clienteCoberturasHonduras;
+    return null;
 }
 
-/* =========================================================
-   SINCRONIZACIÓN EN LA NUBE - HONDURAS
-========================================================= */
+function guardarCacheLocalCoberturas(features) {
+    const fecha = new Date().toISOString();
+    localStorage.setItem(STORAGE_ZONAS, JSON.stringify({
+        version: 1,
+        fecha,
+        zonas: Array.isArray(features) ? features : []
+    }));
+    localStorage.setItem(STORAGE_MUNICIPIOS, JSON.stringify({
+        version: 1,
+        fecha,
+        zonas: []
+    }));
+}
 
-function obtenerGeoJSONCoberturasHonduras() {
-    return {
+async function escribirCoberturasSupabase(features) {
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente) throw new Error("No se encontró el cliente de Supabase.");
+
+    const { data: sesionData, error: errorSesion } = await cliente.auth.getSession();
+    if (errorSesion) throw errorSesion;
+    const sesion = sesionData?.session;
+
+    if (!sesion?.user?.id) {
+        throw new Error("No hay una sesión iniciada en Supabase.");
+    }
+
+    const geojson = {
         type: "FeatureCollection",
-        features: obtenerCoberturas()
+        features: Array.isArray(features) ? features : []
     };
-}
-
-async function guardarCoberturasEnSupabase(features) {
-
-    if (!PUEDE_EDITAR_MAPA) return;
-
-    const cliente = inicializarClienteCoberturas();
-
-    const { data: sesionData } = await cliente.auth.getSession();
-
-    const usuarioId = sesionData?.session?.user?.id || null;
 
     const { error } = await cliente
-        .from(TABLA_COBERTURAS)
+        .from(TABLA_COBERTURAS_SUPABASE)
         .upsert({
-            id: ID_COBERTURA,
-            geojson: {
-                type: "FeatureCollection",
-                features: features
-            },
+            id: ID_COBERTURAS_SUPABASE,
+            geojson,
             updated_at: new Date().toISOString(),
-            updated_by: usuarioId
-        }, {
-            onConflict: "id"
-        });
+            updated_by: sesion.user.id
+        }, { onConflict: "id" });
 
-    if (error) {
-        throw error;
-    }
+    if (error) throw error;
 
-    console.log("Coberturas de Honduras sincronizadas con Supabase.");
+    ultimoSnapshotSupabase = JSON.stringify(geojson);
+    console.log("[COBERTURAS HN] Sincronizadas con Supabase:", geojson.features.length, "zonas");
+    return true;
 }
 
 function encolarGuardadoCoberturasSupabase(features) {
+    if (!sincronizacionSupabaseActiva || aplicandoCoberturaRemota) return;
 
-    if (!PUEDE_EDITAR_MAPA || aplicandoCoberturaRemota) {
-        return;
-    }
-
-    const copia = JSON.parse(JSON.stringify(features));
-
+    const copia = JSON.parse(JSON.stringify(features || []));
     colaGuardadoCoberturas = colaGuardadoCoberturas
-        .then(() => guardarCoberturasEnSupabase(copia))
+        .then(() => escribirCoberturasSupabase(copia))
         .catch(error => {
-            console.error("Error sincronizando Honduras:", error);
-
+            console.error("[COBERTURAS HN] Error sincronizando:", error);
             notificar(
                 "Error de sincronización",
-                "Los cambios están guardados localmente, pero no se pudieron enviar a la nube.",
+                error?.message || "No se pudieron guardar las coberturas en la nube.",
                 "error"
             );
         });
@@ -216,133 +253,125 @@ function encolarGuardadoCoberturasSupabase(features) {
     return colaGuardadoCoberturas;
 }
 
-async function cargarCoberturasDesdeSupabase() {
-
-    const cliente = inicializarClienteCoberturas();
+async function cargarCoberturasSupabase() {
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente) {
+        console.warn("[COBERTURAS HN] Cliente Supabase no disponible; se conserva la copia local.");
+        return false;
+    }
 
     const { data, error } = await cliente
-        .from(TABLA_COBERTURAS)
-        .select("geojson")
-        .eq("id", ID_COBERTURA)
+        .from(TABLA_COBERTURAS_SUPABASE)
+        .select("id, geojson, updated_at, updated_by")
+        .eq("id", ID_COBERTURAS_SUPABASE)
         .maybeSingle();
 
-    if (error) {
-        throw error;
-    }
+    if (error) throw error;
 
-    if (!data) {
+    if (data?.geojson) {
+        const geojson = data.geojson;
+        const features = Array.isArray(geojson)
+            ? geojson
+            : (Array.isArray(geojson.features) ? geojson.features : []);
 
-        // Si todavía no existe el registro, crear uno vacío.
-        if (PUEDE_EDITAR_MAPA) {
-            await guardarCoberturasEnSupabase([]);
+        aplicandoCoberturaRemota = true;
+        cargandoEstado = true;
+        try {
+            reemplazarCoberturas(features);
+            guardarCacheLocalCoberturas(features);
+            ultimoSnapshotSupabase = JSON.stringify({
+                type: "FeatureCollection",
+                features
+            });
+        } finally {
+            cargandoEstado = false;
+            aplicandoCoberturaRemota = false;
         }
 
-        return;
+        console.log("[COBERTURAS HN] Coberturas compartidas cargadas:", features.length);
+        return true;
     }
 
-    const features = Array.isArray(data.geojson?.features)
-        ? data.geojson.features
-        : [];
-
-    aplicandoCoberturaRemota = true;
-    cargandoEstado = true;
-
-    try {
-        reemplazarCoberturas(features);
-
-        // Mantener una copia local como respaldo.
-        localStorage.setItem(
-            STORAGE_ZONAS,
-            JSON.stringify({
-                version: 1,
-                fecha: new Date().toISOString(),
-                zonas: features
-            })
-        );
-
-    } finally {
-        cargandoEstado = false;
-        aplicandoCoberturaRemota = false;
+    // Si aún no existe el registro, migrar las coberturas de este equipo.
+    const locales = obtenerCoberturas();
+    if (locales.length && PUEDE_EDITAR_MAPA) {
+        await escribirCoberturasSupabase(locales);
+        console.log("[COBERTURAS HN] Coberturas locales migradas a Supabase.");
+    } else {
+        console.log("[COBERTURAS HN] No existe registro remoto todavía.");
     }
-
-    console.log("Coberturas de Honduras cargadas desde Supabase.");
-}
-
-async function iniciarSincronizacionCoberturas() {
-
-    const cliente = inicializarClienteCoberturas();
-
-    // Primero cargar los datos compartidos.
-    await cargarCoberturasDesdeSupabase();
-
-    // Escuchar cambios realizados desde otras computadoras.
-    if (canalCoberturasHonduras) {
-        await cliente.removeChannel(canalCoberturasHonduras);
-    }
-
-    canalCoberturasHonduras = cliente
-        .channel("coberturas-honduras-compartidas")
-        .on(
-            "postgres_changes",
-            {
-                event: "*",
-                schema: "public",
-                table: TABLA_COBERTURAS,
-                filter: "id=eq.honduras"
-            },
-            async (payload) => {
-
-                if (payload.eventType === "DELETE") {
-                    return;
-                }
-
-                const geojson = payload.new?.geojson;
-
-                if (!Array.isArray(geojson?.features)) {
-                    return;
-                }
-
-                aplicandoCoberturaRemota = true;
-                cargandoEstado = true;
-
-                try {
-                    reemplazarCoberturas(geojson.features);
-
-                    localStorage.setItem(
-                        STORAGE_ZONAS,
-                        JSON.stringify({
-                            version: 1,
-                            fecha: new Date().toISOString(),
-                            zonas: geojson.features
-                        })
-                    );
-
-                    actualizarListaDepartamentos();
-                    actualizarEstadoMapa();
-
-                    console.log(
-                        "Se recibieron cambios de otra computadora."
-                    );
-
-                } finally {
-                    cargandoEstado = false;
-                    aplicandoCoberturaRemota = false;
-                }
-            }
-        )
-        .subscribe((estado) => {
-
-            console.log(
-                "Estado de sincronización Honduras:",
-                estado
-            );
-
-            sincronizacionSupabaseActiva =
-                estado === "SUBSCRIBED";
-        });
-
     return true;
 }
+
+function iniciarRealtimeCoberturas() {
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente?.channel || canalRealtimeCoberturas) return;
+
+    canalRealtimeCoberturas = cliente
+        .channel("coberturas-honduras-compartidas")
+        .on("postgres_changes", {
+            event: "*",
+            schema: "public",
+            table: TABLA_COBERTURAS_SUPABASE,
+            filter: "id=eq." + ID_COBERTURAS_SUPABASE
+        }, payload => {
+            if (!payload?.new?.geojson) return;
+
+            const geojson = payload.new.geojson;
+            const features = Array.isArray(geojson)
+                ? geojson
+                : (Array.isArray(geojson.features) ? geojson.features : []);
+            const snapshot = JSON.stringify({ type: "FeatureCollection", features });
+
+            if (snapshot === ultimoSnapshotSupabase) return;
+
+            aplicandoCoberturaRemota = true;
+            cargandoEstado = true;
+            try {
+                reemplazarCoberturas(features);
+                guardarCacheLocalCoberturas(features);
+                ultimoSnapshotSupabase = snapshot;
+                guardarEstadoInicialHistorial();
+                actualizarEstadoMapa();
+                console.log("[COBERTURAS HN] Cambio remoto recibido:", features.length, "zonas");
+            } finally {
+                cargandoEstado = false;
+                aplicandoCoberturaRemota = false;
+            }
+        })
+        .subscribe(estado => {
+            console.log("[COBERTURAS HN] Realtime:", estado);
+        });
+}
+
+async function iniciarSincronizacionCoberturasSupabase() {
+    const disponible = await asegurarLibreriaSupabase();
+    if (!disponible) {
+        console.warn("[COBERTURAS HN] Supabase no disponible; funcionamiento local.");
+        return false;
+    }
+
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente) return false;
+
+    try {
+        await cargarCoberturasSupabase();
+        sincronizacionSupabaseActiva = true;
+        cargaInicialSupabaseTerminada = true;
+        iniciarRealtimeCoberturas();
+        console.log("[COBERTURAS HN] Sincronización compartida activa.");
+        return true;
+    } catch (error) {
+        console.error("[COBERTURAS HN] No se pudo iniciar la sincronización:", error);
+        notificar(
+            "Error de conexión con Supabase",
+            error?.message || "No se pudieron cargar las coberturas compartidas.",
+            "error"
+        );
+        return false;
+    }
+}
+
 
 
 /* =========================================================
@@ -581,6 +610,7 @@ function bloquearGeomanParaConsulta() {
 }
 
 
+
 /* =========================================================
    LOS 18 DEPARTAMENTOS OFICIALES DE HONDURAS
 ========================================================= */
@@ -616,41 +646,26 @@ DEPARTAMENTOS_18.forEach(nombre => {
 /* Variantes de escritura que suelen venir en las fuentes de datos */
 const ALIAS_NOMBRES = {
     "atlantida": "Atlántida",
-    "departamento de atlantida": "Atlántida",
     "colon": "Colón",
-    "departamento de colon": "Colón",
     "copan": "Copán",
-    "departamento de copan": "Copán",
     "cortes": "Cortés",
-    "departamento de cortes": "Cortés",
-    "el paraiso": "El Paraíso",
-    "el-paraiso": "El Paraíso",
     "paraiso": "El Paraíso",
-    "francisco morazan": "Francisco Morazán",
-    "francisco-morazan": "Francisco Morazán",
+    "el-paraiso": "El Paraíso",
+    "departamento de el paraiso": "El Paraíso",
     "morazan": "Francisco Morazán",
+    "francisco-morazan": "Francisco Morazán",
     "departamento de francisco morazan": "Francisco Morazán",
     "gracias-a-dios": "Gracias a Dios",
-    "departamento de gracias a dios": "Gracias a Dios",
     "intibuca": "Intibucá",
-    "departamento de intibuca": "Intibucá",
+    "bay islands": "Islas de la Bahía",
     "islas de la bahia": "Islas de la Bahía",
     "islas-de-la-bahia": "Islas de la Bahía",
-    "bay islands": "Islas de la Bahía",
-    "bay islands department": "Islas de la Bahía",
     "departamento de islas de la bahia": "Islas de la Bahía",
-    "la-paz": "La Paz",
     "departamento de la paz": "La Paz",
+    "la-paz": "La Paz",
     "santa barbara": "Santa Bárbara",
     "santa-barbara": "Santa Bárbara",
-    "departamento de santa barbara": "Santa Bárbara",
-    "departamento de choluteca": "Choluteca",
-    "departamento de comayagua": "Comayagua",
-    "departamento de lempira": "Lempira",
-    "departamento de ocotepeque": "Ocotepeque",
-    "departamento de olancho": "Olancho",
-    "departamento de valle": "Valle",
-    "departamento de yoro": "Yoro"
+    "departamento de santa barbara": "Santa Bárbara"
 };
 
 Object.keys(ALIAS_NOMBRES).forEach(clave => {
@@ -749,12 +764,13 @@ async function iniciarSistema() {
         configurarEventosMapa();
         configurarTeclado();
         cargarEstadoGuardado();
+
         await cargarGeografia();
 
-// Cargar y activar sincronización compartida.
-await iniciarSincronizacionCoberturas();
+        // Primero se recuperan las coberturas compartidas y después se activa Realtime.
+        await iniciarSincronizacionCoberturasSupabase();
 
-actualizarListaDepartamentos();
+        actualizarListaDepartamentos();
         actualizarInterfazHerramienta();
         actualizarEstadoMapa();
         guardarEstadoInicialHistorial();
@@ -920,6 +936,7 @@ function manejarEdicionGeoman() {
 
     if (!exigirPermisoEdicion()) return;
 
+
     if (herramientaActiva !== "editar") {
         return;
     }
@@ -939,6 +956,7 @@ function manejarEdicionGeoman() {
 function guardarGeometriasEditadas() {
 
     if (!exigirPermisoEdicion()) return;
+
 
     if (!grupoCoberturas) {
         return;
@@ -1212,6 +1230,7 @@ function procesarNuevaGeometria(geojson, herramienta) {
 
     if (!exigirPermisoEdicion()) return;
 
+
     if (!geometriaValida(geojson)) {
         notificar("Geometría inválida", "La zona dibujada no es válida.", "error");
         return;
@@ -1301,6 +1320,7 @@ function estiloCobertura(feature) {
 function crearCobertura(geometria, herramienta) {
 
     if (!exigirPermisoEdicion()) return;
+
 
     if (!geometria) {
         return null;
@@ -1492,6 +1512,7 @@ function guardarZonaSeleccionada() {
 
     if (!exigirPermisoEdicion()) return;
 
+
     if (!zonaSeleccionada) {
         notificar("Sin selección", "Selecciona primero una cobertura.", "warning");
         return;
@@ -1532,6 +1553,7 @@ function eliminarCobertura(feature) {
 
     if (!exigirPermisoEdicion()) return;
 
+
     if (!feature) {
         return;
     }
@@ -1568,6 +1590,7 @@ function manejarBorradorGeoman(layer) {
 
     if (!exigirPermisoEdicion()) return;
 
+
     const geometria = convertirLayerAGeoJSON(layer);
 
     try { layer.remove(); } catch (_) {}
@@ -1584,6 +1607,7 @@ function manejarBorradorGeoman(layer) {
 function borrarParcialConGeometria(geometriaBorrador) {
 
     if (!exigirPermisoEdicion()) return;
+
 
     if (!geometriaBorrador) {
         return;
@@ -1723,6 +1747,7 @@ function iniciarModoBorrador() {
 
     if (!exigirPermisoEdicion()) return;
 
+
     detenerTodasLasHerramientas();
 
     herramientaActiva = "borrador";
@@ -1746,6 +1771,7 @@ function iniciarModoBorrador() {
 function iniciarModoPintar() {
 
     if (!exigirPermisoEdicion()) return;
+
 
     detenerTodasLasHerramientas();
 
@@ -1779,6 +1805,7 @@ function iniciarModoPintar() {
 function iniciarLineaPintada(evento) {
 
     if (!exigirPermisoEdicion()) return;
+
 
     if (herramientaActiva !== "pintar") {
         return;
@@ -1828,6 +1855,7 @@ function agregarPuntoLinea(latlng) {
 function finalizarLineaPintada() {
 
     if (!exigirPermisoEdicion()) return;
+
 
     if (!dibujandoLinea) {
         return;
@@ -1906,6 +1934,7 @@ function iniciarModoPoligono() {
 function iniciarModoGeoman(herramienta) {
 
     if (!exigirPermisoEdicion()) return;
+
 
     detenerTodasLasHerramientas();
 
@@ -2001,6 +2030,7 @@ function iniciarModoEditar() {
 
     if (!exigirPermisoEdicion()) return;
 
+
     detenerTodasLasHerramientas();
 
     herramientaActiva = "editar";
@@ -2025,6 +2055,7 @@ function iniciarModoEditar() {
 function iniciarModoEliminar() {
 
     if (!exigirPermisoEdicion()) return;
+
 
     detenerTodasLasHerramientas();
 
@@ -2132,6 +2163,7 @@ const ETIQUETAS_NIVEL = {
 function crearCoberturaNivel(geometria, nivel, nombre, idOrigen) {
 
     if (!exigirPermisoEdicion()) return;
+
 
     const existentes = obtenerCoberturas();
 
@@ -2288,7 +2320,7 @@ function obtenerIdFeature(feature) {
 
 
 /* Departamento al que pertenece un municipio (para el tooltip,
-   porque hay nombres repetidos: San José, San Antonio, etc.) */
+   porque hay nombres repetidos: San José, San Pedro, etc.) */
 function departamentoDeMunicipio(feature) {
 
     if (
@@ -3253,13 +3285,13 @@ function seleccionarResultadoBusqueda(resultado) {
     let zoom = 16;
 
     if (tipo.includes("Departamento")) {
-        zoom = 9;
+        zoom = 10;
     } else if (
         tipo.includes("Municipio") ||
         tipo.includes("municipio") ||
         tipo.includes("Ciudad")
     ) {
-        zoom = 12;
+        zoom = 13;
     } else if (
         tipo.includes("Aldea") ||
         tipo.includes("Caserío")
@@ -3502,63 +3534,31 @@ function configurarTeclado() {
 /* =========================================================
    STORAGE
 ========================================================= */
+
 function guardarEstado() {
 
     if (!exigirPermisoEdicion()) return;
-
-    if (cargandoEstado || aplicandoCoberturaRemota) {
-        return;
-    }
+    if (cargandoEstado || aplicandoCoberturaRemota) return;
 
     try {
-
         const features = obtenerCoberturas();
-
-        const fecha = new Date().toISOString();
-
-        // Respaldo local.
-        localStorage.setItem(
-            STORAGE_ZONAS,
-            JSON.stringify({
-                version: 1,
-                fecha: fecha,
-                zonas: features
-            })
-        );
-
-        localStorage.setItem(
-            STORAGE_MUNICIPIOS,
-            JSON.stringify({
-                version: 1,
-                fecha: fecha,
-                zonas: []
-            })
-        );
-
-        // Sincronización en Supabase.
+        guardarCacheLocalCoberturas(features);
         encolarGuardadoCoberturasSupabase(features);
-
     } catch (error) {
-
         console.error("Error guardando:", error);
-
     }
 }
+
 
 function cargarEstadoGuardado() {
 
     cargandoEstado = true;
 
     try {
-
         const texto = localStorage.getItem(STORAGE_ZONAS);
-
-        if (!texto) {
-            return;
-        }
+        if (!texto) return;
 
         const datos = JSON.parse(texto);
-
         let zonas = [];
 
         if (Array.isArray(datos)) {
@@ -3570,25 +3570,28 @@ function cargarEstadoGuardado() {
         if (zonas.length) {
             reemplazarCoberturas(zonas);
         }
-
     } catch (error) {
-
         console.error("Error cargando estado:", error);
-
     } finally {
-
         cargandoEstado = false;
     }
 }
 
 
-function guardarEstadoManual() {
+async function guardarEstadoManual() {
 
     if (!exigirPermisoEdicion()) return;
 
     guardarEstado();
+    await colaGuardadoCoberturas;
 
-    notificar("Guardado", "Todas las coberturas fueron guardadas.", "success");
+    notificar(
+        "Guardado",
+        sincronizacionSupabaseActiva
+            ? "Las coberturas quedaron guardadas y sincronizadas."
+            : "Las coberturas quedaron guardadas en este equipo; Supabase no está conectado.",
+        sincronizacionSupabaseActiva ? "success" : "warning"
+    );
 }
 
 function cargarEstadoManual() {
@@ -3602,6 +3605,7 @@ function cargarEstadoManual() {
 function limpiarTodo() {
 
     if (!exigirPermisoEdicion()) return;
+
 
     const confirmar = window.confirm(
         "¿Seguro que deseas eliminar todas las coberturas?"
@@ -3641,6 +3645,7 @@ function guardarHistorial() {
 
     if (!exigirPermisoEdicion()) return;
 
+
     if (guardandoHistorial || cargandoEstado) {
         return;
     }
@@ -3666,6 +3671,7 @@ function deshacer() {
 
     if (!exigirPermisoEdicion()) return;
 
+
     if (indiceHistorial <= 0) {
         notificar("Deshacer", "No hay acciones para deshacer.", "info");
         return;
@@ -3680,6 +3686,7 @@ function rehacer() {
 
     if (!exigirPermisoEdicion()) return;
 
+
     if (indiceHistorial >= historial.length - 1) {
         notificar("Rehacer", "No hay acciones para rehacer.", "info");
         return;
@@ -3693,6 +3700,7 @@ function rehacer() {
 function aplicarSnapshot(snapshot) {
 
     if (!exigirPermisoEdicion()) return;
+
 
     try {
 
