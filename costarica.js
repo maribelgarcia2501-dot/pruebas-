@@ -10,15 +10,11 @@
    - Pintar manual, Círculo, Rectángulo, Polígono
    - Borrador circular por partes
    - Editar / Eliminar
-   - Guardar / cargar
+   - Guardar / cargar (local + Supabase compartido)
    - Deshacer / rehacer
-   - Buscador y lista de provincias
+   - Buscador (datos locales + Nominatim + Photon) y lista
 
-   MAPA: #mapaCostaRica (si no existe, usa #mapaNicaragua)
-
-   NOTA: los IDs del HTML se mantienen iguales
-   (buscarDepartamento, listaDepartamentos, totalDepartamentos,
-   btnPintarMunicipios, etc.) para que no tengas que cambiar tu HTML.
+   MAPA: #mapaCostaRica
 ========================================================= */
 
 
@@ -29,15 +25,24 @@
 const CONFIG = {
 
     mapaId: "mapaCostaRica",
-    mapaIdAlterno: "mapaNicaragua",
+    mapaIdAlterno: [
+        "mapaNicaragua",
+        "mapaHonduras",
+        "mapaElSalvador",
+        "mapaGuatemala",
+        "mapaPanama",
+        "mapaUruguay"
+    ],
 
-    centro: [9.7489, -83.7534],
+    centro: [9.75, -83.95],
 
     zoomInicial: 8,
 
     zoomMaximoBusqueda: 17,
 
-    limiteBusqueda: 50,
+    limiteBusqueda: 40,
+    limiteBusquedaPhoton: 20,
+    limiteBusquedaLocal: 15,
 
     maxHistorial: 50,
 
@@ -45,24 +50,28 @@ const CONFIG = {
     pasosBuffer: 8,
     anchoPintadoMetros: 1500,
 
-    totalProvinciasEsperado: 7,
+    totalDepartamentosEsperado: 7,
 
-    /* Incluye Isla del Coco */
-    bbox: [-87.30, 5.30, -82.40, 11.30],
+    /* [oeste, sur, este, norte] */
+    bbox: [-86.00, 8.00, -82.50, 11.30],
 
     urls: {
 
-        provincias: [
+        departamentos: [
             "https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09/releaseData/gbOpen/CRI/ADM1/geoBoundaries-CRI-ADM1_simplified.geojson",
-            "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/CRI/ADM1/geoBoundaries-CRI-ADM1_simplified.geojson"
+            "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/CRI/ADM1/geoBoundaries-CRI-ADM1_simplified.geojson",
+            "https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/gbOpen/CRI/ADM1/geoBoundaries-CRI-ADM1_simplified.geojson"
         ],
 
-        cantones: [
+        municipios: [
             "https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09/releaseData/gbOpen/CRI/ADM2/geoBoundaries-CRI-ADM2_simplified.geojson",
-            "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/CRI/ADM2/geoBoundaries-CRI-ADM2_simplified.geojson"
+            "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/CRI/ADM2/geoBoundaries-CRI-ADM2_simplified.geojson",
+            "https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/gbOpen/CRI/ADM2/geoBoundaries-CRI-ADM2_simplified.geojson"
         ],
 
-        nominatim: "https://nominatim.openstreetmap.org/search"
+        nominatim: "https://nominatim.openstreetmap.org/search",
+
+        photon: "https://photon.komoot.io/api/"
     }
 };
 
@@ -74,16 +83,289 @@ const CONFIG = {
 const STORAGE_ZONAS =
     "mensajeriaExpressZonasCoberturaCostaRica";
 
-const STORAGE_CANTONES =
-    "mensajeriaExpressCantonesCoberturaCostaRica";
+const STORAGE_MUNICIPIOS =
+    "mensajeriaExpressMunicipiosCoberturaCostaRica";
+
+
+/* =========================================================
+   SINCRONIZACIÓN COMPARTIDA CON SUPABASE - COSTA RICA
+   Tabla: public.coberturas_costarica
+   Columnas: id (text, PK), geojson (jsonb),
+   updated_at (timestamptz), updated_by (uuid, nullable)
+========================================================= */
+
+const SUPABASE_URL_COBERTURAS = "https://kayzwwgmebtsaiovkeos.supabase.co";
+const SUPABASE_KEY_COBERTURAS = "sb_publishable_yj-QjGhy6RQNUzoxg3HQeg_hkZHuSyL";
+const TABLA_COBERTURAS_SUPABASE = "coberturas_costarica";
+const ID_COBERTURAS_SUPABASE = "costarica";
+const URL_LIBRERIA_SUPABASE =
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
+
+let clienteSupabaseCoberturas = null;
+let canalRealtimeCoberturas = null;
+let sincronizacionSupabaseActiva = false;
+let aplicandoCoberturaRemota = false;
+let colaGuardadoCoberturas = Promise.resolve();
+let ultimoSnapshotSupabase = "";
+let cargaInicialSupabaseTerminada = false;
+
+function asegurarLibreriaSupabase() {
+    if (
+        (typeof supabaseClient !== "undefined" && supabaseClient?.from) ||
+        window.supabaseClient?.from ||
+        window.supabase?.createClient ||
+        window.Supabase?.createClient
+    ) {
+        return Promise.resolve(true);
+    }
+
+    return new Promise(resolve => {
+        const existente = document.querySelector('script[data-supabase-coberturas="1"]');
+        if (existente) {
+            existente.addEventListener("load", () => resolve(true), { once: true });
+            existente.addEventListener("error", () => resolve(false), { once: true });
+            return;
+        }
+
+        const script = document.createElement("script");
+        script.src = URL_LIBRERIA_SUPABASE;
+        script.dataset.supabaseCoberturas = "1";
+        script.onload = () => {
+            console.log("[COBERTURAS CR] supabase-js cargado.");
+            resolve(true);
+        };
+        script.onerror = () => {
+            console.error("[COBERTURAS CR] No se pudo cargar supabase-js.");
+            resolve(false);
+        };
+        document.head.appendChild(script);
+    });
+}
+
+function obtenerClienteSupabaseCoberturas() {
+    if (clienteSupabaseCoberturas) return clienteSupabaseCoberturas;
+
+    try {
+        if (typeof supabaseClient !== "undefined" && supabaseClient?.from) {
+            clienteSupabaseCoberturas = supabaseClient;
+            return clienteSupabaseCoberturas;
+        }
+    } catch (_) {}
+
+    if (window.supabaseClient?.from) {
+        clienteSupabaseCoberturas = window.supabaseClient;
+        return clienteSupabaseCoberturas;
+    }
+
+    const libreria = window.supabase || window.Supabase;
+    if (libreria?.createClient) {
+        clienteSupabaseCoberturas = libreria.createClient(
+            SUPABASE_URL_COBERTURAS,
+            SUPABASE_KEY_COBERTURAS,
+            {
+                auth: {
+                    storageKey: "mensajeria-intranet-auth",
+                    persistSession: true,
+                    autoRefreshToken: true,
+                    detectSessionInUrl: false
+                }
+            }
+        );
+        return clienteSupabaseCoberturas;
+    }
+
+    return null;
+}
+
+function guardarCacheLocalCoberturas(features) {
+    const fecha = new Date().toISOString();
+    localStorage.setItem(STORAGE_ZONAS, JSON.stringify({
+        version: 1,
+        fecha,
+        zonas: Array.isArray(features) ? features : []
+    }));
+    localStorage.setItem(STORAGE_MUNICIPIOS, JSON.stringify({
+        version: 1,
+        fecha,
+        zonas: []
+    }));
+}
+
+async function escribirCoberturasSupabase(features) {
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente) throw new Error("No se encontró el cliente de Supabase.");
+
+    const { data: sesionData, error: errorSesion } = await cliente.auth.getSession();
+    if (errorSesion) throw errorSesion;
+    const sesion = sesionData?.session;
+
+    if (!sesion?.user?.id) {
+        throw new Error("No hay una sesión iniciada en Supabase.");
+    }
+
+    const geojson = {
+        type: "FeatureCollection",
+        features: Array.isArray(features) ? features : []
+    };
+
+    const { error } = await cliente
+        .from(TABLA_COBERTURAS_SUPABASE)
+        .upsert({
+            id: ID_COBERTURAS_SUPABASE,
+            geojson,
+            updated_at: new Date().toISOString(),
+            updated_by: sesion.user.id
+        }, { onConflict: "id" });
+
+    if (error) throw error;
+
+    ultimoSnapshotSupabase = JSON.stringify(geojson);
+    console.log("[COBERTURAS CR] Sincronizadas con Supabase:", geojson.features.length, "zonas");
+    return true;
+}
+
+function encolarGuardadoCoberturasSupabase(features) {
+    if (!sincronizacionSupabaseActiva || aplicandoCoberturaRemota) return;
+
+    const copia = JSON.parse(JSON.stringify(features || []));
+    colaGuardadoCoberturas = colaGuardadoCoberturas
+        .then(() => escribirCoberturasSupabase(copia))
+        .catch(error => {
+            console.error("[COBERTURAS CR] Error sincronizando:", error);
+            notificar(
+                "Error de sincronización",
+                error?.message || "No se pudieron guardar las coberturas en la nube.",
+                "error"
+            );
+        });
+
+    return colaGuardadoCoberturas;
+}
+
+async function cargarCoberturasSupabase() {
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente) {
+        console.warn("[COBERTURAS CR] Cliente Supabase no disponible; se conserva la copia local.");
+        return false;
+    }
+
+    const { data, error } = await cliente
+        .from(TABLA_COBERTURAS_SUPABASE)
+        .select("id, geojson, updated_at, updated_by")
+        .eq("id", ID_COBERTURAS_SUPABASE)
+        .maybeSingle();
+
+    if (error) throw error;
+
+    if (data?.geojson) {
+        const geojson = data.geojson;
+        const features = Array.isArray(geojson)
+            ? geojson
+            : (Array.isArray(geojson.features) ? geojson.features : []);
+
+        aplicandoCoberturaRemota = true;
+        cargandoEstado = true;
+        try {
+            reemplazarCoberturas(features);
+            guardarCacheLocalCoberturas(features);
+            ultimoSnapshotSupabase = JSON.stringify({
+                type: "FeatureCollection",
+                features
+            });
+        } finally {
+            cargandoEstado = false;
+            aplicandoCoberturaRemota = false;
+        }
+
+        console.log("[COBERTURAS CR] Coberturas compartidas cargadas:", features.length);
+        return true;
+    }
+
+    // Si aún no existe el registro, migrar las coberturas de este equipo.
+    const locales = obtenerCoberturas();
+    if (locales.length && PUEDE_EDITAR_MAPA) {
+        await escribirCoberturasSupabase(locales);
+        console.log("[COBERTURAS CR] Coberturas locales migradas a Supabase.");
+    } else {
+        console.log("[COBERTURAS CR] No existe registro remoto todavía.");
+    }
+    return true;
+}
+
+function iniciarRealtimeCoberturas() {
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente?.channel || canalRealtimeCoberturas) return;
+
+    canalRealtimeCoberturas = cliente
+        .channel("coberturas-costarica-compartidas")
+        .on("postgres_changes", {
+            event: "*",
+            schema: "public",
+            table: TABLA_COBERTURAS_SUPABASE,
+            filter: "id=eq." + ID_COBERTURAS_SUPABASE
+        }, payload => {
+            if (!payload?.new?.geojson) return;
+
+            const geojson = payload.new.geojson;
+            const features = Array.isArray(geojson)
+                ? geojson
+                : (Array.isArray(geojson.features) ? geojson.features : []);
+            const snapshot = JSON.stringify({ type: "FeatureCollection", features });
+
+            if (snapshot === ultimoSnapshotSupabase) return;
+
+            aplicandoCoberturaRemota = true;
+            cargandoEstado = true;
+            try {
+                reemplazarCoberturas(features);
+                guardarCacheLocalCoberturas(features);
+                ultimoSnapshotSupabase = snapshot;
+                guardarEstadoInicialHistorial();
+                actualizarEstadoMapa();
+                console.log("[COBERTURAS CR] Cambio remoto recibido:", features.length, "zonas");
+            } finally {
+                cargandoEstado = false;
+                aplicandoCoberturaRemota = false;
+            }
+        })
+        .subscribe(estado => {
+            console.log("[COBERTURAS CR] Realtime:", estado);
+        });
+}
+
+async function iniciarSincronizacionCoberturasSupabase() {
+    const disponible = await asegurarLibreriaSupabase();
+    if (!disponible) {
+        console.warn("[COBERTURAS CR] Supabase no disponible; funcionamiento local.");
+        return false;
+    }
+
+    const cliente = obtenerClienteSupabaseCoberturas();
+    if (!cliente) return false;
+
+    try {
+        await cargarCoberturasSupabase();
+        sincronizacionSupabaseActiva = true;
+        cargaInicialSupabaseTerminada = true;
+        iniciarRealtimeCoberturas();
+        console.log("[COBERTURAS CR] Sincronización compartida activa.");
+        return true;
+    } catch (error) {
+        console.error("[COBERTURAS CR] No se pudo iniciar la sincronización:", error);
+        notificar(
+            "Error de conexión con Supabase",
+            error?.message || "No se pudieron cargar las coberturas compartidas.",
+            "error"
+        );
+        return false;
+    }
+}
 
 
 /* =========================================================
    SISTEMA DE PERMISOS DE EDICIÓN
    Login Central: Supabase storageKey "mensajeria-intranet-auth"
    También utiliza sessionStorage "usuarioIntranet".
-   Solo los correos indicados pueden modificar.
-   (Agrega o cambia aquí los correos autorizados para Costa Rica.)
 ========================================================= */
 
 const USUARIOS_AUTORIZADOS = [
@@ -123,7 +405,6 @@ function correoDesdeObjetoSesion(objeto) {
 }
 
 function leerCorreoGuardado() {
-    // Formato de usuario que guarda el Login Central.
     try {
         const usuarioIntranet = sessionStorage.getItem("usuarioIntranet");
         if (usuarioIntranet) {
@@ -134,7 +415,6 @@ function leerCorreoGuardado() {
         console.warn("No se pudo leer usuarioIntranet:", error);
     }
 
-    // Sesión persistida por Supabase con storageKey personalizado.
     try {
         const sesion = localStorage.getItem("mensajeria-intranet-auth");
         if (sesion) {
@@ -160,7 +440,7 @@ function actualizarPermisoPorCorreo(correo) {
     actualizarInterfazPermisos();
 
     console.log(
-        "[COBERTURAS] Usuario:",
+        "[COBERTURAS CR] Usuario:",
         CORREO_USUARIO_ACTUAL || "(sin sesión detectada)",
         "| Permiso:",
         PUEDE_EDITAR_MAPA ? "EDICIÓN" : "SOLO CONSULTA"
@@ -171,12 +451,9 @@ async function inicializarPermisosMapa() {
     let correo = "";
     let clienteDetectado = false;
 
-    // Preferir siempre la sesión viva del cliente Supabase del Login Central.
     try {
         let cliente = null;
 
-        // El Login Central declara const supabaseClient en el ámbito global
-        // de los scripts clásicos, aunque no lo publique en window.
         if (typeof supabaseClient !== "undefined") {
             cliente = supabaseClient;
         } else if (window.supabaseClient) {
@@ -208,9 +485,6 @@ async function inicializarPermisosMapa() {
         console.error("Error consultando autenticación Supabase:", error);
     }
 
-    // Si el cliente Supabase está disponible, una sesión nula significa
-    // que no hay usuario autenticado: no aceptar datos de sesión antiguos.
-    // Si el cliente no está expuesto por el Login Central, usar su usuarioIntranet.
     if (!clienteDetectado && !correo) correo = leerCorreoGuardado();
 
     actualizarPermisoPorCorreo(correo);
@@ -220,7 +494,6 @@ async function inicializarPermisosMapa() {
 }
 
 function exigirPermisoEdicion() {
-    // No confiar en el correo escrito en un campo ni en el área del usuario.
     if (!PERMISOS_INICIALIZADOS || !PUEDE_EDITAR_MAPA) {
         notificar(
             "Acceso de solo consulta",
@@ -236,7 +509,6 @@ function exigirPermisoEdicion() {
 const BOTONES_SOLO_EDICION = [
     "btnNuevaZona",
     "btnPintar",
-    "btnBorradorCircular",
     "btnCirculo",
     "btnRectangulo",
     "btnPoligono",
@@ -264,8 +536,6 @@ function actualizarInterfazPermisos() {
             : "Disponible solo para los usuarios autorizados";
     });
 
-    // Los controles de nivel se mantienen habilitados para CONSULTAR
-    // departamentos y municipios; no conceden permiso de edición.
     [
         "btnPintarMunicipios",
         "btnPintarProvincias",
@@ -315,13 +585,11 @@ function bloquearGeomanParaConsulta() {
 }
 
 
-
-
 /* =========================================================
-   PROVINCIAS OFICIALES DE COSTA RICA
+   PROVINCIAS DE COSTA RICA (7)
 ========================================================= */
 
-const PROVINCIAS_OFICIALES = [
+const DEPARTAMENTOS_OFICIALES = [
     "Alajuela",
     "Cartago",
     "Guanacaste",
@@ -334,8 +602,39 @@ const PROVINCIAS_OFICIALES = [
 /* Nombre sin tildes -> nombre oficial con tildes */
 const NOMBRES_VISIBLES = {};
 
-PROVINCIAS_OFICIALES.forEach(nombre => {
+DEPARTAMENTOS_OFICIALES.forEach(nombre => {
     NOMBRES_VISIBLES[normalizarTextoClave(nombre)] = nombre;
+});
+
+/* Variantes de escritura que suelen venir en las fuentes de datos */
+const ALIAS_NOMBRES = {
+    "san jose": "San José",
+    "san-jose": "San José",
+    "provincia de san jose": "San José",
+    "san jose province": "San José",
+
+    "limon": "Limón",
+    "provincia de limon": "Limón",
+    "limon province": "Limón",
+
+    "provincia de alajuela": "Alajuela",
+    "alajuela province": "Alajuela",
+
+    "provincia de cartago": "Cartago",
+    "cartago province": "Cartago",
+
+    "provincia de heredia": "Heredia",
+    "heredia province": "Heredia",
+
+    "provincia de guanacaste": "Guanacaste",
+    "guanacaste province": "Guanacaste",
+
+    "provincia de puntarenas": "Puntarenas",
+    "puntarenas province": "Puntarenas"
+};
+
+Object.keys(ALIAS_NOMBRES).forEach(clave => {
+    NOMBRES_VISIBLES[normalizarTextoClave(clave)] = ALIAS_NOMBRES[clave];
 });
 
 
@@ -344,19 +643,19 @@ PROVINCIAS_OFICIALES.forEach(nombre => {
 ========================================================= */
 
 let mapa = null;
-let capaProvincias = null;
-let capaCantones = null;
+let capaDepartamentos = null;
+let capaMunicipios = null;
 let grupoCoberturas = null;
 let grupoMarcadoresBusqueda = null;
 
-let provinciasData = null;
-let cantonesData = null;
+let departamentosData = null;
+let municipiosData = null;
 
 let zonaSeleccionada = null;
 let herramientaActiva = "ninguna";
 
-/* "provincias" | "cantones" */
-let nivelActivo = "provincias";
+/* "departamentos" (provincias) | "municipios" (cantones) */
+let nivelActivo = "departamentos";
 
 let historial = [];
 let indiceHistorial = -1;
@@ -370,7 +669,6 @@ let puntosLinea = [];
 let mouseMoveLineaHandler = null;
 let mouseUpLineaHandler = null;
 
-let mascaraCostaRica = null;
 let ultimaEdicion = 0;
 
 let controladorBusqueda = null;
@@ -391,14 +689,14 @@ function normalizarTextoClave(texto) {
         .replace(/[\u0300-\u036f]/g, "");
 }
 
-function nombreVisibleProvincia(nombre) {
+function nombreVisibleDepartamento(nombre) {
 
     const clave = normalizarTextoClave(nombre);
 
     return NOMBRES_VISIBLES[clave] || nombre;
 }
 
-function esProvinciaOficial(nombre) {
+function esDepartamentoOficial(nombre) {
     return Boolean(
         NOMBRES_VISIBLES[normalizarTextoClave(nombre)]
     );
@@ -415,16 +713,26 @@ async function iniciarSistema() {
 
     try {
 
+        // Resolver permisos ANTES de habilitar cualquier herramienta.
+        await inicializarPermisosMapa();
+
         verificarDependencias();
         verificarMapaHTML();
         crearMapa();
-        await inicializarPermisosMapa();
+
+        if (!PUEDE_EDITAR_MAPA) {
+            bloquearGeomanParaConsulta();
+        }
+
         configurarEventosInterfaz();
         configurarEventosMapa();
         configurarTeclado();
         cargarEstadoGuardado();
 
         await cargarGeografia();
+
+        // Primero se recuperan las coberturas compartidas y después se activa Realtime.
+        await iniciarSincronizacionCoberturasSupabase();
 
         actualizarListaDepartamentos();
         actualizarInterfazHerramienta();
@@ -475,13 +783,15 @@ function verificarMapaHTML() {
         return;
     }
 
-    if (document.getElementById(CONFIG.mapaIdAlterno)) {
-        CONFIG.mapaId = CONFIG.mapaIdAlterno;
-        return;
+    for (const id of CONFIG.mapaIdAlterno) {
+        if (document.getElementById(id)) {
+            CONFIG.mapaId = id;
+            return;
+        }
     }
 
     throw new Error(
-        "No existe #mapaCostaRica (ni #mapaNicaragua) en el HTML."
+        "No existe #mapaCostaRica (ni ningún mapa alterno) en el HTML."
     );
 }
 
@@ -547,10 +857,12 @@ function configurarGeoman() {
 
 function manejarCreacionGeoman(evento) {
 
-    if (!exigirPermisoEdicion()) { try { evento?.layer?.remove(); } catch (_) {} return; }
+    if (!evento || !evento.layer) return;
 
-
-    if (!evento || !evento.layer) {
+    if (!PUEDE_EDITAR_MAPA) {
+        try { evento.layer.remove(); } catch (_) {}
+        bloquearGeomanParaConsulta();
+        exigirPermisoEdicion();
         return;
     }
 
@@ -586,8 +898,7 @@ function manejarCreacionGeoman(evento) {
 
 function manejarEdicionGeoman() {
 
-    if (!exigirPermisoEdicion()) { bloquearGeomanParaConsulta(); return; }
-
+    if (!exigirPermisoEdicion()) return;
 
     if (herramientaActiva !== "editar") {
         return;
@@ -608,7 +919,6 @@ function manejarEdicionGeoman() {
 function guardarGeometriasEditadas() {
 
     if (!exigirPermisoEdicion()) return;
-
 
     if (!grupoCoberturas) {
         return;
@@ -648,8 +958,7 @@ function guardarGeometriasEditadas() {
 
     guardarEstado();
     guardarHistorial();
-
-    }
+}
 
 
 /* =========================================================
@@ -733,17 +1042,17 @@ function geometriaIntersecaCostaRica(feature) {
     } catch (_) {}
 
     if (
-        !provinciasData ||
-        !Array.isArray(provinciasData.features) ||
-        provinciasData.features.length === 0
+        !departamentosData ||
+        !Array.isArray(departamentosData.features) ||
+        departamentosData.features.length === 0
     ) {
         return true;
     }
 
-    for (const provincia of provinciasData.features) {
+    for (const departamento of departamentosData.features) {
 
         try {
-            if (turf.booleanIntersects(feature, provincia)) {
+            if (turf.booleanIntersects(feature, departamento)) {
                 return true;
             }
         } catch (_) {}
@@ -760,24 +1069,24 @@ function recortarACostaRica(feature) {
     }
 
     if (
-        !provinciasData ||
-        !Array.isArray(provinciasData.features) ||
-        provinciasData.features.length === 0
+        !departamentosData ||
+        !Array.isArray(departamentosData.features) ||
+        departamentosData.features.length === 0
     ) {
         return feature;
     }
 
     const partes = [];
 
-    for (const provincia of provinciasData.features) {
+    for (const departamento of departamentosData.features) {
 
         try {
 
-            if (!turf.booleanIntersects(feature, provincia)) {
+            if (!turf.booleanIntersects(feature, departamento)) {
                 continue;
             }
 
-            const interseccion = intersectarTurf(feature, provincia);
+            const interseccion = intersectarTurf(feature, departamento);
 
             if (interseccion) {
                 partes.push(interseccion);
@@ -883,7 +1192,6 @@ function procesarNuevaGeometria(geojson, herramienta) {
 
     if (!exigirPermisoEdicion()) return;
 
-
     if (!geometriaValida(geojson)) {
         notificar("Geometría inválida", "La zona dibujada no es válida.", "error");
         return;
@@ -974,7 +1282,6 @@ function crearCobertura(geometria, herramienta) {
 
     if (!exigirPermisoEdicion()) return;
 
-
     if (!geometria) {
         return null;
     }
@@ -987,10 +1294,7 @@ function crearCobertura(geometria, herramienta) {
             tipo: obtenerTipoFormulario(),
             estado: obtenerEstadoFormulario(),
             herramienta: herramienta,
-
-            /* Las figuras dibujadas NO son ni provincia ni cantón */
             nivel: "manual",
-
             fecha: new Date().toISOString()
         },
         geometry: geometria.geometry
@@ -1026,6 +1330,11 @@ function obtenerCoberturas() {
 
 
 function reemplazarCoberturas(features) {
+
+    // La carga inicial/consulta está permitida; cualquier cambio normal exige permiso.
+    if (!cargandoEstado && !exigirPermisoEdicion()) {
+        return;
+    }
 
     if (!grupoCoberturas) {
         return;
@@ -1160,7 +1469,6 @@ function guardarZonaSeleccionada() {
 
     if (!exigirPermisoEdicion()) return;
 
-
     if (!zonaSeleccionada) {
         notificar("Sin selección", "Selecciona primero una cobertura.", "warning");
         return;
@@ -1201,7 +1509,6 @@ function eliminarCobertura(feature) {
 
     if (!exigirPermisoEdicion()) return;
 
-
     if (!feature) {
         return;
     }
@@ -1236,8 +1543,7 @@ function eliminarCobertura(feature) {
 
 function manejarBorradorGeoman(layer) {
 
-    if (!exigirPermisoEdicion()) { try { layer?.remove(); } catch (_) {} return; }
-
+    if (!exigirPermisoEdicion()) return;
 
     const geometria = convertirLayerAGeoJSON(layer);
 
@@ -1255,7 +1561,6 @@ function manejarBorradorGeoman(layer) {
 function borrarParcialConGeometria(geometriaBorrador) {
 
     if (!exigirPermisoEdicion()) return;
-
 
     if (!geometriaBorrador) {
         return;
@@ -1299,8 +1604,7 @@ function borrarParcialConGeometria(geometriaBorrador) {
             !diferencia.geometry ||
             geometriaVacia(diferencia)
         ) {
-
-                        eliminadas++;
+            eliminadas++;
             continue;
         }
 
@@ -1396,7 +1700,6 @@ function iniciarModoBorrador() {
 
     if (!exigirPermisoEdicion()) return;
 
-
     detenerTodasLasHerramientas();
 
     herramientaActiva = "borrador";
@@ -1420,7 +1723,6 @@ function iniciarModoBorrador() {
 function iniciarModoPintar() {
 
     if (!exigirPermisoEdicion()) return;
-
 
     detenerTodasLasHerramientas();
 
@@ -1453,6 +1755,8 @@ function iniciarModoPintar() {
 
 function iniciarLineaPintada(evento) {
 
+    if (!exigirPermisoEdicion()) return;
+
     if (herramientaActiva !== "pintar") {
         return;
     }
@@ -1474,6 +1778,13 @@ function iniciarLineaPintada(evento) {
 
 function agregarPuntoLinea(latlng) {
 
+    if (!PUEDE_EDITAR_MAPA) {
+        dibujandoLinea = false;
+        puntosLinea = [];
+        if (mapa?.dragging && !mapa.dragging.enabled()) mapa.dragging.enable();
+        return;
+    }
+
     if (!latlng) {
         return;
     }
@@ -1494,7 +1805,6 @@ function agregarPuntoLinea(latlng) {
 function finalizarLineaPintada() {
 
     if (!exigirPermisoEdicion()) return;
-
 
     if (!dibujandoLinea) {
         return;
@@ -1574,7 +1884,6 @@ function iniciarModoGeoman(herramienta) {
 
     if (!exigirPermisoEdicion()) return;
 
-
     detenerTodasLasHerramientas();
 
     herramientaActiva = herramienta;
@@ -1624,7 +1933,6 @@ function detenerTodasLasHerramientas() {
         }
     } catch (_) {}
 
-    /* Desactivar edición en las coberturas */
     try {
         if (grupoCoberturas) {
             grupoCoberturas.eachLayer(layer => {
@@ -1669,7 +1977,6 @@ function iniciarModoEditar() {
 
     if (!exigirPermisoEdicion()) return;
 
-
     detenerTodasLasHerramientas();
 
     herramientaActiva = "editar";
@@ -1695,7 +2002,6 @@ function iniciarModoEliminar() {
 
     if (!exigirPermisoEdicion()) return;
 
-
     detenerTodasLasHerramientas();
 
     herramientaActiva = "eliminar";
@@ -1711,22 +2017,25 @@ function iniciarModoEliminar() {
    NIVELES: PROVINCIAS / CANTONES
 ========================================================= */
 
-function iniciarProvincias() {
+function iniciarDepartamentos() {
 
-    nivelActivo = "provincias";
+    nivelActivo = "departamentos";
 
     detenerTodasLasHerramientas();
     actualizarInteraccionCapas();
 
-    notificar("Provincias", "Haz clic en una provincia para pintarla.", "info");
+    notificar(
+        "Provincias",
+        PUEDE_EDITAR_MAPA
+            ? "Haz clic en una provincia para agregarla a la cobertura."
+            : "Modo consulta: puedes explorar las provincias, pero no pintarlas.",
+        "info"
+    );
 }
-
-/* Alias por compatibilidad con el código anterior */
-const iniciarDepartamentos = iniciarProvincias;
 
 function iniciarPintarMunicipios() {
 
-    if (!cantonesData || !cantonesData.features.length) {
+    if (!municipiosData || !municipiosData.features.length) {
         notificar(
             "Cantones no disponibles",
             "No se pudieron cargar los cantones.",
@@ -1735,15 +2044,21 @@ function iniciarPintarMunicipios() {
         return;
     }
 
-    nivelActivo = "cantones";
+    nivelActivo = "municipios";
 
     detenerTodasLasHerramientas();
     actualizarInteraccionCapas();
 
-    notificar("Cantones", "Haz clic en un cantón para pintarlo.", "info");
+    notificar(
+        "Cantones",
+        PUEDE_EDITAR_MAPA
+            ? "Haz clic en un cantón para agregarlo a la cobertura."
+            : "Modo consulta: puedes explorar los cantones, pero no pintarlos.",
+        "info"
+    );
 }
 
-function seleccionarProvincia(feature) {
+function seleccionarDepartamento(feature) {
 
     if (!feature) {
         return;
@@ -1757,13 +2072,13 @@ function seleccionarProvincia(feature) {
 
     crearCoberturaNivel(
         geometria,
-        "provincia",
+        "departamento",
         obtenerNombreFeature(feature),
         obtenerIdFeature(feature)
     );
 }
 
-function seleccionarCanton(feature) {
+function seleccionarMunicipio(feature) {
 
     if (!feature) {
         return;
@@ -1777,7 +2092,7 @@ function seleccionarCanton(feature) {
 
     crearCoberturaNivel(
         geometria,
-        "canton",
+        "municipio",
         obtenerNombreFeature(feature),
         obtenerIdFeature(feature)
     );
@@ -1785,15 +2100,14 @@ function seleccionarCanton(feature) {
 
 
 const ETIQUETAS_NIVEL = {
-    provincia: "Provincia agregada",
-    canton: "Cantón agregado"
+    departamento: "Provincia agregada",
+    municipio: "Cantón agregado"
 };
 
 
 function crearCoberturaNivel(geometria, nivel, nombre, idOrigen) {
 
     if (!exigirPermisoEdicion()) return;
-
 
     const existentes = obtenerCoberturas();
 
@@ -1888,7 +2202,9 @@ function obtenerNombreFeature(feature) {
         "shapeName", "SHAPENAME", "shape_name", "SHAPE_NAME",
         "nombre", "NOMBRE", "Nombre",
         "provincia", "PROVINCIA", "Provincia",
-        "canton", "CANTON", "Canton", "cantón", "Cantón",
+        "canton", "CANTON", "Canton", "Cantón",
+        "departamento", "DEPARTAMENTO", "Departamento",
+        "municipio", "MUNICIPIO", "Municipio",
         "name", "NAME", "Name",
         "NOM_PROV", "NOM_CANT"
     ];
@@ -1900,7 +2216,7 @@ function obtenerNombreFeature(feature) {
             p[campo] !== null &&
             String(p[campo]).trim() !== ""
         ) {
-            return nombreVisibleProvincia(String(p[campo]).trim());
+            return nombreVisibleDepartamento(String(p[campo]).trim());
         }
     }
 
@@ -1915,10 +2231,12 @@ function obtenerNombreFeature(feature) {
                 clave.toLowerCase().includes("nom") ||
                 clave.toLowerCase().includes("name") ||
                 clave.toLowerCase().includes("prov") ||
-                clave.toLowerCase().includes("cant")
+                clave.toLowerCase().includes("cant") ||
+                clave.toLowerCase().includes("depto") ||
+                clave.toLowerCase().includes("muni")
             )
         ) {
-            return nombreVisibleProvincia(valor.trim());
+            return nombreVisibleDepartamento(valor.trim());
         }
     }
 
@@ -1947,6 +2265,36 @@ function obtenerIdFeature(feature) {
 
     return generarId();
 }
+
+
+/* Provincia a la que pertenece un cantón (para el tooltip,
+   porque hay nombres repetidos) */
+function departamentoDeMunicipio(feature) {
+
+    if (
+        !departamentosData ||
+        !Array.isArray(departamentosData.features)
+    ) {
+        return "";
+    }
+
+    try {
+
+        const punto = turf.pointOnFeature(feature);
+
+        for (const depto of departamentosData.features) {
+
+            if (turf.booleanPointInPolygon(punto, depto)) {
+                return obtenerNombreFeature(depto);
+            }
+        }
+
+    } catch (_) {}
+
+    return "";
+}
+
+
 /* =========================================================
    CARGAR GEOGRAFÍA
 ========================================================= */
@@ -1961,39 +2309,39 @@ async function cargarGeografia() {
 
     try {
 
-        provinciasData = await cargarGeoJSON(CONFIG.urls.provincias);
+        departamentosData = await cargarGeoJSON(CONFIG.urls.departamentos);
 
-        const nombres = provinciasData.features.map(
+        const nombres = departamentosData.features.map(
             f => obtenerNombreFeature(f)
         );
 
         console.log("PROVINCIAS CARGADAS:", nombres.length);
-        console.log("Nombres de provincias:", nombres);
+        console.log("Nombres:", nombres);
 
-        const noReconocidas = nombres.filter(n => !esProvinciaOficial(n));
+        const noReconocidos = nombres.filter(n => !esDepartamentoOficial(n));
 
         if (
-            nombres.length !== CONFIG.totalProvinciasEsperado ||
-            noReconocidas.length
+            nombres.length !== CONFIG.totalDepartamentosEsperado ||
+            noReconocidos.length
         ) {
             console.warn(
-                `Se esperaban ${CONFIG.totalProvinciasEsperado} provincias. ` +
+                `Se esperaban ${CONFIG.totalDepartamentosEsperado} provincias. ` +
                 `Cargadas: ${nombres.length}. ` +
-                `Nombres no reconocidos:`,
-                noReconocidas
+                `Nombres no reconocidos (agrégalos a ALIAS_NOMBRES):`,
+                noReconocidos
             );
         }
 
-        crearCapaProvincias();
+        crearCapaDepartamentos();
 
-    } catch (errorProvincias) {
+    } catch (errorDepartamentos) {
 
         console.error(
             "No se pudieron cargar las provincias:",
-            errorProvincias
+            errorDepartamentos
         );
 
-        provinciasData = {
+        departamentosData = {
             type: "FeatureCollection",
             features: []
         };
@@ -2007,20 +2355,20 @@ async function cargarGeografia() {
 
     try {
 
-        cantonesData = await cargarGeoJSON(CONFIG.urls.cantones);
+        municipiosData = await cargarGeoJSON(CONFIG.urls.municipios);
 
-        console.log("CANTONES CARGADOS:", cantonesData.features.length);
+        console.log("CANTONES CARGADOS:", municipiosData.features.length);
 
-        crearCapaCantones();
+        crearCapaMunicipios();
 
-    } catch (errorCantones) {
+    } catch (errorMunicipios) {
 
         console.error(
             "No se pudieron cargar los cantones:",
-            errorCantones
+            errorMunicipios
         );
 
-        cantonesData = {
+        municipiosData = {
             type: "FeatureCollection",
             features: []
         };
@@ -2032,7 +2380,6 @@ async function cargarGeografia() {
         );
     }
 
-    construirMascaraCostaRica();
     actualizarInteraccionCapas();
 }
 
@@ -2099,15 +2446,15 @@ async function cargarGeoJSON(urls) {
    CAPAS PROVINCIAS / CANTONES
 ========================================================= */
 
-function crearCapaProvincias() {
+function crearCapaDepartamentos() {
 
-    if (capaProvincias) {
-        mapa.removeLayer(capaProvincias);
+    if (capaDepartamentos) {
+        mapa.removeLayer(capaDepartamentos);
     }
 
-    capaProvincias = L.geoJSON(provinciasData, {
+    capaDepartamentos = L.geoJSON(departamentosData, {
 
-        style: estiloProvincia,
+        style: estiloDepartamento,
 
         onEachFeature: function (feature, layer) {
 
@@ -2115,7 +2462,7 @@ function crearCapaProvincias() {
 
                 L.DomEvent.stopPropagation(evento);
 
-                seleccionarProvincia(feature);
+                seleccionarDepartamento(feature);
             });
 
             layer.bindTooltip(
@@ -2127,7 +2474,7 @@ function crearCapaProvincias() {
     });
 }
 
-function estiloProvincia() {
+function estiloDepartamento() {
     return {
         color: "#64748b",
         weight: 1.5,
@@ -2136,15 +2483,15 @@ function estiloProvincia() {
     };
 }
 
-function crearCapaCantones() {
+function crearCapaMunicipios() {
 
-    if (capaCantones) {
-        mapa.removeLayer(capaCantones);
+    if (capaMunicipios) {
+        mapa.removeLayer(capaMunicipios);
     }
 
-    capaCantones = L.geoJSON(cantonesData, {
+    capaMunicipios = L.geoJSON(municipiosData, {
 
-        style: estiloCanton,
+        style: estiloMunicipio,
 
         onEachFeature: function (feature, layer) {
 
@@ -2152,11 +2499,14 @@ function crearCapaCantones() {
 
                 L.DomEvent.stopPropagation(evento);
 
-                seleccionarCanton(feature);
+                seleccionarMunicipio(feature);
             });
 
+            const nombre = obtenerNombreFeature(feature);
+            const depto = departamentoDeMunicipio(feature);
+
             layer.bindTooltip(
-                obtenerNombreFeature(feature),
+                depto ? `${nombre} (${depto})` : nombre,
                 { sticky: true }
             );
         }
@@ -2164,7 +2514,7 @@ function crearCapaCantones() {
     });
 }
 
-function estiloCanton() {
+function estiloMunicipio() {
     return {
         color: "#94a3b8",
         weight: 1,
@@ -2173,28 +2523,9 @@ function estiloCanton() {
     };
 }
 
-function construirMascaraCostaRica() {
-
-    mascaraCostaRica = null;
-
-    if (!provinciasData || !provinciasData.features) {
-        return;
-    }
-
-    mascaraCostaRica = unirFeatures(provinciasData.features);
-}
-
 
 /* =========================================================
    INTERACCIÓN DE CAPAS
-   --------------------------------------------------------
-   CORRECCIÓN IMPORTANTE:
-   Antes las dos capas (departamentos y municipios) estaban
-   siempre en el mapa. La de municipios quedaba ENCIMA y
-   recibía todos los clics, por eso al pintar un departamento
-   el sistema lo tomaba como municipio. Cambiar
-   options.interactive después de crear la capa no tiene
-   efecto. Ahora solo la capa del nivel activo está en el mapa.
 ========================================================= */
 
 function actualizarInteraccionCapas() {
@@ -2203,31 +2534,30 @@ function actualizarInteraccionCapas() {
         return;
     }
 
-    const mostrarProvincias = nivelActivo === "provincias";
+    const mostrarDepartamentos = nivelActivo === "departamentos";
 
-    if (capaProvincias) {
+    if (capaDepartamentos) {
 
-        if (mostrarProvincias && !mapa.hasLayer(capaProvincias)) {
-            capaProvincias.addTo(mapa);
+        if (mostrarDepartamentos && !mapa.hasLayer(capaDepartamentos)) {
+            capaDepartamentos.addTo(mapa);
         }
 
-        if (!mostrarProvincias && mapa.hasLayer(capaProvincias)) {
-            mapa.removeLayer(capaProvincias);
-        }
-    }
-
-    if (capaCantones) {
-
-        if (!mostrarProvincias && !mapa.hasLayer(capaCantones)) {
-            capaCantones.addTo(mapa);
-        }
-
-        if (mostrarProvincias && mapa.hasLayer(capaCantones)) {
-            mapa.removeLayer(capaCantones);
+        if (!mostrarDepartamentos && mapa.hasLayer(capaDepartamentos)) {
+            mapa.removeLayer(capaDepartamentos);
         }
     }
 
-    /* Las coberturas siempre quedan por encima de las capas base */
+    if (capaMunicipios) {
+
+        if (!mostrarDepartamentos && !mapa.hasLayer(capaMunicipios)) {
+            capaMunicipios.addTo(mapa);
+        }
+
+        if (mostrarDepartamentos && mapa.hasLayer(capaMunicipios)) {
+            mapa.removeLayer(capaMunicipios);
+        }
+    }
+
     if (grupoCoberturas && mapa.hasLayer(grupoCoberturas)) {
         try {
             grupoCoberturas.bringToFront();
@@ -2263,7 +2593,7 @@ function configurarBuscador() {
 
     input.setAttribute(
         "placeholder",
-        "Busca calles, barrios, distritos, cantones..."
+        "Busca calles, barrios, distritos, cantones, provincias..."
     );
 
     input.addEventListener("input", function () {
@@ -2329,6 +2659,215 @@ function buscarDireccionConDebounce(texto) {
 }
 
 
+/* Fuente 1: provincias y cantones ya cargados (instantáneo) */
+function buscarEnDatosLocales(texto) {
+
+    const clave = normalizarTextoClave(texto);
+
+    if (!clave) {
+        return [];
+    }
+
+    const salida = [];
+
+    const fuentes = [
+        { data: departamentosData, esMunicipio: false },
+        { data: municipiosData, esMunicipio: true }
+    ];
+
+    fuentes.forEach(function (fuente) {
+
+        const features =
+            fuente.data && Array.isArray(fuente.data.features)
+                ? fuente.data.features
+                : [];
+
+        features.forEach(function (feature) {
+
+            if (salida.length >= CONFIG.limiteBusquedaLocal) {
+                return;
+            }
+
+            const nombre = obtenerNombreFeature(feature);
+
+            if (!normalizarTextoClave(nombre).includes(clave)) {
+                return;
+            }
+
+            try {
+
+                const coordenadas =
+                    turf.pointOnFeature(feature).geometry.coordinates;
+
+                const depto = fuente.esMunicipio
+                    ? departamentoDeMunicipio(feature)
+                    : "";
+
+                salida.push({
+                    lat: String(coordenadas[1]),
+                    lon: String(coordenadas[0]),
+                    name: nombre,
+                    display_name: [nombre, depto, "Costa Rica"]
+                        .filter(Boolean)
+                        .join(", "),
+                    type: fuente.esMunicipio ? "county" : "administrative",
+                    class: "boundary",
+                    address: fuente.esMunicipio
+                        ? { county: nombre }
+                        : { state: nombre },
+                    fuente: "local"
+                });
+
+            } catch (_) {}
+        });
+    });
+
+    return salida;
+}
+
+
+/* Fuente 2: Nominatim (OpenStreetMap) */
+async function buscarNominatim(texto, signal) {
+
+    const b = CONFIG.bbox;
+
+    const parametros = new URLSearchParams({
+        q: texto,
+        format: "jsonv2",
+        addressdetails: "1",
+        namedetails: "1",
+        extratags: "1",
+        limit: String(CONFIG.limiteBusqueda),
+        countrycodes: "cr",
+        "accept-language": "es",
+        dedupe: "0",
+        viewbox: `${b[0]},${b[3]},${b[2]},${b[1]}`
+    });
+
+    const respuesta = await fetch(
+        `${CONFIG.urls.nominatim}?${parametros.toString()}`,
+        {
+            method: "GET",
+            headers: { Accept: "application/json" },
+            signal: signal
+        }
+    );
+
+    if (!respuesta.ok) {
+        throw new Error(`Nominatim HTTP ${respuesta.status}`);
+    }
+
+    const datos = await respuesta.json();
+
+    return Array.isArray(datos) ? datos : [];
+}
+
+
+/* Fuente 3: Photon (OpenStreetMap, tolera errores de escritura) */
+async function buscarPhoton(texto, signal) {
+
+    const b = CONFIG.bbox;
+
+    const parametros = new URLSearchParams({
+        q: texto,
+        limit: String(CONFIG.limiteBusquedaPhoton),
+        lat: String(CONFIG.centro[0]),
+        lon: String(CONFIG.centro[1]),
+        bbox: `${b[0]},${b[1]},${b[2]},${b[3]}`
+    });
+
+    const respuesta = await fetch(
+        `${CONFIG.urls.photon}?${parametros.toString()}`,
+        {
+            method: "GET",
+            headers: { Accept: "application/json" },
+            signal: signal
+        }
+    );
+
+    if (!respuesta.ok) {
+        throw new Error(`Photon HTTP ${respuesta.status}`);
+    }
+
+    const datos = await respuesta.json();
+
+    const features = Array.isArray(datos.features) ? datos.features : [];
+
+    return features
+        .filter(function (f) {
+            const pais = f.properties && f.properties.countrycode;
+            return !pais || String(pais).toUpperCase() === "CR";
+        })
+        .map(function (f) {
+
+            const p = f.properties || {};
+            const coordenadas = f.geometry.coordinates;
+
+            const calle = p.street
+                ? (p.housenumber ? `${p.street} ${p.housenumber}` : p.street)
+                : "";
+
+            const partes = [
+                p.name, calle, p.district, p.city,
+                p.county, p.state, p.country
+            ].filter(Boolean);
+
+            const unicas = partes.filter(
+                (x, i) => partes.indexOf(x) === i
+            );
+
+            return {
+                lat: String(coordenadas[1]),
+                lon: String(coordenadas[0]),
+                name: p.name || calle || unicas[0] || "Ubicación",
+                display_name: unicas.join(", ") || "Ubicación",
+                type: p.osm_value,
+                class: p.osm_key,
+                address: p.osm_key === "highway"
+                    ? { road: p.name || calle }
+                    : {},
+                fuente: "photon"
+            };
+        });
+}
+
+
+/* Unir resultados sin repetir lugares */
+function combinarResultados() {
+
+    const listas = Array.prototype.slice.call(arguments);
+
+    const vistos = new Set();
+    const salida = [];
+
+    listas.forEach(function (lista) {
+
+        (lista || []).forEach(function (r) {
+
+            if (!r || !r.lat || !r.lon) {
+                return;
+            }
+
+            const nombre = r.name || r.display_name || "";
+
+            const clave =
+                normalizarTextoClave(nombre) + "|" +
+                Number(r.lat).toFixed(3) + "|" +
+                Number(r.lon).toFixed(3);
+
+            if (vistos.has(clave)) {
+                return;
+            }
+
+            vistos.add(clave);
+            salida.push(r);
+        });
+    });
+
+    return salida;
+}
+
+
 async function buscarDireccion(texto) {
 
     texto = String(texto || "").trim();
@@ -2351,45 +2890,58 @@ async function buscarDireccion(texto) {
 
     controladorBusqueda = new AbortController();
 
+    const senal = controladorBusqueda.signal;
+
     mostrarEstadoBusqueda("Buscando ubicaciones...");
 
     try {
 
-        const b = CONFIG.bbox;
+        const locales = buscarEnDatosLocales(texto);
 
-        const parametros = new URLSearchParams({
-            q: texto,
-            format: "jsonv2",
-            addressdetails: "1",
-            namedetails: "1",
-            extratags: "1",
-            limit: String(CONFIG.limiteBusqueda),
-            countrycodes: "cr",
-            "accept-language": "es",
-            dedupe: "1",
-            viewbox: `${b[0]},${b[3]},${b[2]},${b[1]}`
-        });
-
-        const respuesta = await fetch(
-            `${CONFIG.urls.nominatim}?${parametros.toString()}`,
-            {
-                method: "GET",
-                headers: { Accept: "application/json" },
-                signal: controladorBusqueda.signal
-            }
-        );
-
-        if (!respuesta.ok) {
-            throw new Error(`Error HTTP ${respuesta.status}`);
+        if (locales.length) {
+            mostrarResultadosDirecciones(locales);
         }
 
-        const resultados = await respuesta.json();
+        const respuestas = await Promise.allSettled([
+            buscarNominatim(texto, senal),
+            buscarPhoton(texto, senal)
+        ]);
 
         if (solicitud !== numeroSolicitudBusqueda) {
             return;
         }
 
-        mostrarResultadosDirecciones(resultados);
+        const nominatim = respuestas[0];
+        const photon = respuestas[1];
+
+        if (
+            nominatim.status === "rejected" &&
+            photon.status === "rejected"
+        ) {
+
+            if (
+                (nominatim.reason && nominatim.reason.name === "AbortError") ||
+                (photon.reason && photon.reason.name === "AbortError")
+            ) {
+                return;
+            }
+
+            if (locales.length) {
+                return;
+            }
+
+            throw nominatim.reason;
+        }
+
+        const deNominatim =
+            nominatim.status === "fulfilled" ? nominatim.value : [];
+
+        const dePhoton =
+            photon.status === "fulfilled" ? photon.value : [];
+
+        mostrarResultadosDirecciones(
+            combinarResultados(locales, deNominatim, dePhoton)
+        );
 
     } catch (error) {
 
@@ -2442,7 +2994,8 @@ function obtenerTipoUbicacion(resultado) {
         address.road ||
         [
             "road", "residential", "service", "street", "pedestrian",
-            "living_street", "primary", "secondary", "tertiary"
+            "living_street", "primary", "secondary", "tertiary",
+            "trunk", "unclassified"
         ].includes(tipo)
     ) {
         return "Calle o avenida";
@@ -2454,7 +3007,7 @@ function obtenerTipoUbicacion(resultado) {
         address.quarter ||
         ["neighbourhood", "suburb", "quarter"].includes(tipo)
     ) {
-        return "Barrio o urbanización";
+        return "Barrio o zona";
     }
 
     if (address.hamlet || tipo === "hamlet") {
@@ -2462,7 +3015,7 @@ function obtenerTipoUbicacion(resultado) {
     }
 
     if (address.village || tipo === "village") {
-        return "Pueblo o distrito";
+        return "Pueblo o poblado";
     }
 
     if (address.town || tipo === "town") {
@@ -2539,7 +3092,7 @@ function mostrarResultadosDirecciones(resultados) {
         const nombre = document.createElement("strong");
 
         nombre.textContent =
-            resultado.name || resultado.display_name.split(",")[0];
+            resultado.name || String(resultado.display_name || "Ubicación").split(",")[0];
 
         Object.assign(nombre.style, {
             display: "block",
@@ -2549,7 +3102,7 @@ function mostrarResultadosDirecciones(resultados) {
 
         const descripcion = document.createElement("span");
 
-        descripcion.textContent = resultado.display_name;
+        descripcion.textContent = resultado.display_name || "";
 
         Object.assign(descripcion.style, {
             display: "block",
@@ -2598,7 +3151,7 @@ function mostrarResultadosDirecciones(resultados) {
 
 function escaparTextoHTML(texto) {
 
-        return String(texto || "")
+    return String(texto || "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -2625,7 +3178,7 @@ function seleccionarResultadoBusqueda(resultado) {
     const tipo = obtenerTipoUbicacion(resultado);
 
     const nombre =
-        resultado.name || resultado.display_name.split(",")[0];
+        resultado.name || String(resultado.display_name || "Ubicación").split(",")[0];
 
     const direccion = resultado.display_name || nombre;
 
@@ -2741,22 +3294,21 @@ function actualizarListaDepartamentos() {
 
     lista.innerHTML = "";
 
-    if (!provinciasData || !provinciasData.features) {
+    if (!departamentosData || !departamentosData.features) {
         return;
     }
 
     const input = document.getElementById("buscarLista");
-
     const filtro = input ? normalizarTextoClave(input.value) : "";
 
-    const ordenadas = provinciasData.features
+    const departamentos = departamentosData.features
         .slice()
         .sort((a, b) =>
             obtenerNombreFeature(a)
                 .localeCompare(obtenerNombreFeature(b), "es")
         );
 
-    ordenadas.forEach(feature => {
+    departamentos.forEach(feature => {
 
         const nombre = obtenerNombreFeature(feature);
 
@@ -2765,15 +3317,12 @@ function actualizarListaDepartamentos() {
         }
 
         const elemento = document.createElement("button");
-
         elemento.type = "button";
         elemento.className = "item-departamento";
         elemento.textContent = nombre;
 
         elemento.addEventListener("click", function () {
-
-            /* Pintar una provincia desde la lista siempre es nivel provincia */
-            seleccionarProvincia(feature);
+            seleccionarDepartamento(feature);
         });
 
         lista.appendChild(elemento);
@@ -2782,7 +3331,7 @@ function actualizarListaDepartamentos() {
     const totalElemento = document.getElementById("totalDepartamentos");
 
     if (totalElemento) {
-        totalElemento.textContent = String(provinciasData.features.length); /* 7 */
+        totalElemento.textContent = String(DEPARTAMENTOS_OFICIALES.length);
     }
 }
 
@@ -2798,8 +3347,8 @@ function configurarEventosInterfaz() {
     vincularBoton("btnNuevaZona", iniciarModoPintar);
     vincularBoton("btnPintar", iniciarModoPintar);
     vincularBoton("btnPintarMunicipios", iniciarPintarMunicipios);
-    vincularBoton("btnPintarProvincias", iniciarProvincias);
-    vincularBoton("btnPintarDepartamentos", iniciarProvincias);
+    vincularBoton("btnPintarProvincias", iniciarDepartamentos);
+    vincularBoton("btnPintarDepartamentos", iniciarDepartamentos);
     vincularBoton("btnCirculo", iniciarModoCirculo);
     vincularBoton("btnRectangulo", iniciarModoRectangulo);
     vincularBoton("btnPoligono", iniciarModoPoligono);
@@ -2843,6 +3392,8 @@ function configurarEventosInterfaz() {
             actualizarListaDepartamentos();
         });
     }
+
+    actualizarInterfazPermisos();
 
     const btnPincel = document.getElementById("btnPincel");
 
@@ -2915,40 +3466,18 @@ function configurarTeclado() {
 
 
 /* =========================================================
-   STORAGE
+   STORAGE (local + Supabase)
 ========================================================= */
 
 function guardarEstado() {
 
-    if (!cargandoEstado && !exigirPermisoEdicion()) return;
-
-
-    if (cargandoEstado) {
-        return;
-    }
+    if (!exigirPermisoEdicion()) return;
+    if (cargandoEstado || aplicandoCoberturaRemota) return;
 
     try {
-
-        const fecha = new Date().toISOString();
-
-        localStorage.setItem(
-            STORAGE_ZONAS,
-            JSON.stringify({
-                version: 1,
-                fecha: fecha,
-                zonas: obtenerCoberturas()
-            })
-        );
-
-        localStorage.setItem(
-            STORAGE_CANTONES,
-            JSON.stringify({
-                version: 1,
-                fecha: fecha,
-                zonas: []
-            })
-        );
-
+        const features = obtenerCoberturas();
+        guardarCacheLocalCoberturas(features);
+        encolarGuardadoCoberturasSupabase(features);
     } catch (error) {
         console.error("Error guardando:", error);
     }
@@ -2960,15 +3489,10 @@ function cargarEstadoGuardado() {
     cargandoEstado = true;
 
     try {
-
         const texto = localStorage.getItem(STORAGE_ZONAS);
-
-        if (!texto) {
-            return;
-        }
+        if (!texto) return;
 
         const datos = JSON.parse(texto);
-
         let zonas = [];
 
         if (Array.isArray(datos)) {
@@ -2980,26 +3504,28 @@ function cargarEstadoGuardado() {
         if (zonas.length) {
             reemplazarCoberturas(zonas);
         }
-
     } catch (error) {
-
         console.error("Error cargando estado:", error);
-
     } finally {
-
         cargandoEstado = false;
     }
 }
 
 
-function guardarEstadoManual() {
+async function guardarEstadoManual() {
 
     if (!exigirPermisoEdicion()) return;
 
-
     guardarEstado();
+    await colaGuardadoCoberturas;
 
-    notificar("Guardado", "Todas las coberturas fueron guardadas.", "success");
+    notificar(
+        "Guardado",
+        sincronizacionSupabaseActiva
+            ? "Las coberturas quedaron guardadas y sincronizadas."
+            : "Las coberturas quedaron guardadas en este equipo; Supabase no está conectado.",
+        sincronizacionSupabaseActiva ? "success" : "warning"
+    );
 }
 
 function cargarEstadoManual() {
@@ -3013,7 +3539,6 @@ function cargarEstadoManual() {
 function limpiarTodo() {
 
     if (!exigirPermisoEdicion()) return;
-
 
     const confirmar = window.confirm(
         "¿Seguro que deseas eliminar todas las coberturas?"
@@ -3053,7 +3578,6 @@ function guardarHistorial() {
 
     if (!exigirPermisoEdicion()) return;
 
-
     if (guardandoHistorial || cargandoEstado) {
         return;
     }
@@ -3079,7 +3603,6 @@ function deshacer() {
 
     if (!exigirPermisoEdicion()) return;
 
-
     if (indiceHistorial <= 0) {
         notificar("Deshacer", "No hay acciones para deshacer.", "info");
         return;
@@ -3094,7 +3617,6 @@ function rehacer() {
 
     if (!exigirPermisoEdicion()) return;
 
-
     if (indiceHistorial >= historial.length - 1) {
         notificar("Rehacer", "No hay acciones para rehacer.", "info");
         return;
@@ -3106,6 +3628,8 @@ function rehacer() {
 }
 
 function aplicarSnapshot(snapshot) {
+
+    if (!exigirPermisoEdicion()) return;
 
     try {
 
@@ -3171,10 +3695,9 @@ function actualizarInterfazHerramienta() {
 
     const activos = (mapaBotones[herramientaActiva] || []).slice();
 
-    /* Los botones de nivel se marcan según el nivel activo */
     if (herramientaActiva === "ninguna") {
 
-        if (nivelActivo === "cantones") {
+        if (nivelActivo === "municipios") {
             activos.push("btnPintarMunicipios");
         } else {
             activos.push("btnPintarProvincias", "btnPintarDepartamentos");
@@ -3279,8 +3802,8 @@ function generarId() {
 
 window.iniciarModoPintar = iniciarModoPintar;
 window.iniciarPintarMunicipios = iniciarPintarMunicipios;
-window.iniciarProvincias = iniciarProvincias;
-window.iniciarDepartamentos = iniciarProvincias;
+window.iniciarProvincias = iniciarDepartamentos;
+window.iniciarDepartamentos = iniciarDepartamentos;
 window.iniciarModoCirculo = iniciarModoCirculo;
 window.iniciarModoRectangulo = iniciarModoRectangulo;
 window.iniciarModoPoligono = iniciarModoPoligono;
@@ -3294,3 +3817,13 @@ window.limpiarTodo = limpiarTodo;
 window.deshacer = deshacer;
 window.rehacer = rehacer;
 window.cerrarModal = cerrarModal;
+
+/* Diagnóstico de permisos para soporte */
+window.verificarPermisosCoberturas = inicializarPermisosMapa;
+window.obtenerEstadoPermisosCoberturas = function () {
+    return {
+        correo: CORREO_USUARIO_ACTUAL,
+        puedeEditar: PUEDE_EDITAR_MAPA,
+        inicializado: PERMISOS_INICIALIZADOS
+    };
+};
